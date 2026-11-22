@@ -1,0 +1,203 @@
+/* Mobile-first responsive studio layout (mobile 320px+, tablet 640px+, desktop 1024px+) with safe-area support */
+
+.app-shell {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding-top: var(--safe-top);
+  padding-right: var(--safe-right);
+  padding-bottom: var(--safe-bottom);
+  padding-left: var(--safe-left);
+}
+
+.studio-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  box-shadow: var(--shadow-sm);
+}
+
+.studio-header__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.brand__icon {
+  flex: 0 0 auto;
+  border-radius: var(--radius-sm);
+}
+
+.brand__text {
+  min-width: 0;
+}
+
+.brand__title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.brand__subtitle {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 100%;
+}
+
+.recovery-banner-shell {
+  width: 100%;
+  max-width: 1480px;
+  margin: var(--space-3) auto 0;
+  padding: 0 var(--space-3);
+}
+
+.studio-main {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: var(--space-3);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "preview"
+    "timeline"
+    "crop"
+    "clips"
+    "export"
+    "source"
+    "history"
+    "foundation";
+  gap: var(--space-4);
+  align-content: start;
+}
+
+.preview-panel {
+  grid-area: preview;
+}
+
+.tl-panel {
+  grid-area: timeline;
+}
+
+.crop-panel {
+  grid-area: crop;
+}
+
+.clip-panel {
+  grid-area: clips;
+}
+
+.export-panel {
+  grid-area: export;
+}
+
+.input-panel {
+  grid-area: source;
+}
+
+.history-panel {
+  grid-area: history;
+}
+
+.panel--foundation {
+  grid-area: foundation;
+}
+
+.capability-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.metadata-grid {
+  margin: var(--space-3) 0 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+/* Tablet: adaptive 2 columns below full-width preview and timeline */
+@media (min-width: 640px) {
+  .recovery-banner-shell {
+    padding: 0 var(--space-4);
+  }
+
+  .studio-main {
+    padding: var(--space-4);
+  }
+
+  .studio-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      "preview preview"
+      "timeline timeline"
+      "crop clips"
+      "export source"
+      "history history"
+      "foundation foundation";
+  }
+
+  .capability-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metadata-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Desktop: preview + timeline paired side-by-side with clips, crop + export below */
+@media (min-width: 1024px) {
+  .studio-header {
+    padding: var(--space-3) var(--space-6);
+  }
+
+  .recovery-banner-shell {
+    padding: 0 var(--space-6);
+  }
+
+  .studio-main {
+    padding: var(--space-5) var(--space-6);
+  }
+
+  .studio-grid {
+    grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+    grid-template-areas:
+      "preview clips"
+      "timeline clips"
+      "crop export"
+      "source source"
+      "history history"
+      "foundation foundation";
+    align-items: start;
+  }
+
+  .capability-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

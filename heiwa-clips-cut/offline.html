@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f766e">
+  <title>Offline — Heiwa Clips Cut</title>
+  <link rel="icon" type="image/svg+xml" href="./icons/favicon.svg">
+  <link rel="stylesheet" href="./css/app.css">
+  <link rel="stylesheet" href="./css/components.css">
+  <style>
+    .offline-wrap {
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+    }
+    .offline-card {
+      width: min(520px, 100%);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .offline-card__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <main class="offline-wrap">
+    <section class="panel offline-card" aria-labelledby="offline-heading">
+      <h1 id="offline-heading" class="panel__title">You are offline</h1>
+      <p class="panel__lead">
+        Heiwa Clips Cut processes videos 100% locally on your device once the app shell is cached.
+      </p>
+      <p class="muted-text">
+        Reconnect briefly to load the app shell (and the media library on first visit), then you can clip local videos offline anytime.
+      </p>
+      <div class="offline-card__actions">
+        <a href="./index.html" class="btn btn--primary">Open Studio</a>
+        <button id="status-offline-retry" type="button" class="btn btn--secondary">Retry Connection</button>
+      </div>
+    </section>
+  </main>
+  <script type="module">
+    const retryBtn = document.getElementById('status-offline-retry');
+    if (retryBtn) {
+      retryBtn.addEventListener('click', () => {
+        window.location.reload();
+      });
+    }
+  </script>
+</body>
+</html>

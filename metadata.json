@@ -1,0 +1,6 @@
+{
+  "name": "Heiwa Clips Cut",
+  "description": "Local-only, browser-based multi-clip video clipping studio with optional crop/reframe, PWA support, and Android TWA packaging.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

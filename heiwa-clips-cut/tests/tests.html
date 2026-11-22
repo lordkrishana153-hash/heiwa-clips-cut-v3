@@ -1,0 +1,1339 @@
+<!DOCTYPE html>
+<!--
+  Heiwa Clips Cut — Browser Test Runner (Stages 1-9)
+  DOM IDs:
+  - status-test-summary : Pass/fail summary badge
+  - status-test-rerun   : Re-run all tests button
+  - status-test-list    : Rendered test results list
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Tests — Heiwa Clips Cut</title>
+  <link rel="icon" type="image/svg+xml" href="../icons/favicon.svg">
+  <link rel="stylesheet" href="../css/app.css">
+  <link rel="stylesheet" href="../css/layout.css">
+  <link rel="stylesheet" href="../css/components.css">
+  <style>
+    .test-list {
+      list-style: none;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .test-item {
+      padding: 10px 12px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-border);
+      background: var(--color-surface-alt);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .test-item--pass {
+      border-left: 4px solid var(--color-ok);
+    }
+
+    .test-item--fail {
+      border-left: 4px solid var(--color-error);
+    }
+
+    .test-item__head {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .test-item__detail {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--color-text-muted);
+      overflow-wrap: anywhere;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="studio-header">
+      <div class="studio-header__top">
+        <div class="brand">
+          <img src="../icons/favicon.svg" alt="" width="28" height="28" class="brand__icon" aria-hidden="true">
+          <div class="brand__text">
+            <h1 class="brand__title">Heiwa Clips Cut — Test Suite</h1>
+            <p class="brand__subtitle">Plain ES module browser test runner</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <span id="status-test-summary" class="status-pill status-pill--loading">Running…</span>
+          <button id="status-test-rerun" type="button" class="btn btn--secondary">Re-run tests</button>
+          <a href="../index.html" class="btn btn--ghost">Back to studio</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="studio-main">
+      <section class="panel" aria-label="Unit test results">
+        <h2 class="panel__title">Unit Tests (Stages 1–9: time, store, errors, metadata, media-input, clips, timeline, shortcuts, layout, crop, export queue, downloads, ZIP, storage, PWA/TWA)</h2>
+        <ul id="status-test-list" class="test-list"></ul>
+      </section>
+    </main>
+  </div>
+
+  <script type="module">
+    import { clamp, formatTimestamp, parseTimestamp } from '../js/time.js';
+    import { ACTIONS, createInitialState, createStore, MAX_HISTORY } from '../js/store.js';
+    import {
+      createAppError,
+      ERROR_CATALOG,
+      ERROR_CODES,
+      fail,
+      isAppError,
+      normalizeError,
+      ok
+    } from '../js/errors.js';
+    import {
+      computeSourceWarnings,
+      evaluateCompatibility,
+      formatFileSize,
+      LARGE_FILE_WARN_BYTES,
+      LONG_DURATION_WARN_SEC,
+      validateMetadataValues
+    } from '../js/metadata.js';
+    import { getActiveObjectUrl, revokeActiveObjectUrl, validateBasicVideoFile } from '../js/media-input.js';
+    import {
+      addClip,
+      CLIP_WARN_THRESHOLD,
+      computePresetRange,
+      deleteClip,
+      duplicateClip,
+      getAdjacentClip,
+      parseAndValidateRange,
+      quickAddClipAtPlayhead,
+      reorderClip,
+      setDraftMarkerFromPlayhead,
+      setLastUsedDurationSec,
+      shouldWarnClipCount,
+      updateClipDetails,
+      validateClipRange
+    } from '../js/clips.js';
+    import {
+      clampZoom,
+      computePinchZoom,
+      computeScrollLeftForPlayhead,
+      computeTickInterval,
+      computeTimelineMetrics,
+      MAX_ZOOM,
+      MIN_ZOOM,
+      timeToX,
+      xToTime
+    } from '../js/timeline.js';
+    import { isEditableTarget, resolveShortcutAction } from '../js/shortcuts.js';
+    import { classifyViewportWidth } from '../js/ui/layout.js';
+    import {
+      applyCropToAllClips,
+      computeCropPlan,
+      computePanFromDrag,
+      computeVideoContentRect,
+      CROP_RATIOS,
+      isCropDefault,
+      makeEvenDimension,
+      normalizeCrop,
+      resetSelectedClipCrop,
+      updateSelectedClipCrop
+    } from '../js/crop.js';
+    import {
+      computeBitrateProfile,
+      isFastModeContainerCompatible,
+      normalizeCodecFamily,
+      normalizeExportSettings,
+      selectVideoProbeCodecs,
+      validateWorkerStartMessage
+    } from '../js/export-worker.js';
+    import {
+      buildEncoderConfigsForClip,
+      buildQueueJobs,
+      computeQueueSummary,
+      estimateExportBatch,
+      runExportPreflight,
+      verifyOutputDuration
+    } from '../js/export-queue.js';
+    import {
+      buildClipFilename,
+      buildZipFilename,
+      downloadBatchSequentially,
+      MAX_FILENAME_LENGTH,
+      sanitizeCustomFilename,
+      sanitizeFilenamePart
+    } from '../js/download.js';
+    import {
+      buildZipArchive,
+      computeBlobCrc32,
+      computeCrc32Bytes,
+      estimateZipTotalBytes,
+      ZIP_MAX_BYTES
+    } from '../js/zip.js';
+    import {
+      appendExportHistoryEntry,
+      buildProjectSnapshot,
+      classifyStorageError,
+      clearExportHistory,
+      clearProjectSnapshot,
+      compareSourceFileToSnapshot,
+      createExportHistoryRecord,
+      isSnapshotRecoverable,
+      isStorageAvailable,
+      listExportHistory,
+      loadProjectSnapshot,
+      reconcileRecoveredClips,
+      saveProjectSnapshot,
+      validateProjectSnapshot
+    } from '../js/storage.js';
+    import {
+      detectDisplayMode,
+      detectIosSafari,
+      isOnlineStatus,
+      isSecurePwaContext,
+      validateAssetLinksPayload
+    } from '../js/pwa.js';
+
+    const tests = [];
+
+    function test(name, fn) {
+      tests.push({ name, fn });
+    }
+
+    function assert(condition, message) {
+      if (!condition) {
+        throw new Error(message || 'Assertion failed');
+      }
+    }
+
+    function assertEqual(actual, expected, label) {
+      if (actual !== expected) {
+        throw new Error(`${label || 'Mismatch'}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+      }
+    }
+
+    function makeClip(id, name, startSec = 0, endSec = 10) {
+      return {
+        id,
+        name,
+        startSec,
+        endSec,
+        crop: { ratio: 'orig', zoom: 1, panX: 0.5, panY: 0.5, fit: 'fill', background: 'none' },
+        processStatus: 'idle',
+        exportStatus: 'none'
+      };
+    }
+
+    /* --- Stage 1: time.js tests --- */
+    test('time.parseTimestamp accepts seconds (90), MM:SS (1:30), and HH:MM:SS.mmm (1:02:03.5)', () => {
+      const r1 = parseTimestamp('90');
+      assert(r1.ok, '90 should parse');
+      assertEqual(r1.value, 90, '90');
+
+      const r2 = parseTimestamp('1:30');
+      assert(r2.ok, '1:30 should parse');
+      assertEqual(r2.value, 90, '1:30');
+
+      const r3 = parseTimestamp('1:02:03.5');
+      assert(r3.ok, '1:02:03.5 should parse');
+      assertEqual(r3.value, 3723.5, '1:02:03.5');
+
+      const r4 = parseTimestamp('00:00:00.250');
+      assert(r4.ok, '00:00:00.250 should parse');
+      assertEqual(r4.value, 0.25, '0.25');
+
+      const r5 = parseTimestamp(12.3456);
+      assert(r5.ok, 'numeric input should parse');
+      assertEqual(r5.value, 12.346, 'rounded ms');
+    });
+
+    test('time.parseTimestamp rejects negatives, letters, extra colons, and invalid ranges', () => {
+      const invalidInputs = [
+        '-5',
+        '-0:10',
+        '+10',
+        'abc',
+        '1:2a',
+        '1:02:03:04',
+        ':30',
+        '1::30',
+        '1:60',
+        '1:60:00',
+        '1:00:60',
+        '',
+        '   ',
+        -1,
+        NaN,
+        Infinity,
+        null
+      ];
+      for (const bad of invalidInputs) {
+        const res = parseTimestamp(bad);
+        assert(!res.ok, `Expected failure for ${JSON.stringify(bad)}`);
+        assertEqual(res.error.code, ERROR_CODES.E_TIME_PARSE, `code for ${JSON.stringify(bad)}`);
+      }
+    });
+
+    test('time.formatTimestamp formats HH:MM:SS.mmm and rejects invalid values', () => {
+      assertEqual(formatTimestamp(0).value, '00:00:00.000', 'zero');
+      assertEqual(formatTimestamp(90).value, '00:01:30.000', '90s');
+      assertEqual(formatTimestamp(3723.5).value, '01:02:03.500', '1h2m3.5s');
+      assertEqual(formatTimestamp(360000).value, '100:00:00.000', '100h');
+
+      assert(!formatTimestamp(-0.1).ok, 'negative rejected');
+      assert(!formatTimestamp(NaN).ok, 'NaN rejected');
+      assert(!formatTimestamp(Infinity).ok, 'Infinity rejected');
+      assert(!formatTimestamp('10').ok, 'string rejected');
+    });
+
+    test('time.clamp clamps within bounds and validates inputs', () => {
+      assertEqual(clamp(5, 0, 10).value, 5, 'inside range');
+      assertEqual(clamp(-2, 0, 10).value, 0, 'below min');
+      assertEqual(clamp(25, 0, 10).value, 10, 'above max');
+      assert(!clamp(5, 10, 0).ok, 'min > max rejected');
+      assert(!clamp(NaN, 0, 10).ok, 'NaN rejected');
+    });
+
+    /* --- Stage 1: store.js tests --- */
+    test('store initial state matches frozen contract 3.1', () => {
+      const s = createInitialState();
+      assertEqual(s.source, null, 'source');
+      assertEqual(s.playheadSec, 0, 'playheadSec');
+      assertEqual(s.draft.startSec, 0, 'draft.startSec');
+      assertEqual(s.draft.endSec, 0, 'draft.endSec');
+      assert(Array.isArray(s.clips) && s.clips.length === 0, 'clips array');
+      assertEqual(s.selectedClipId, null, 'selectedClipId');
+      assertEqual(s.exportSettings.format, 'mp4', 'format');
+      assertEqual(s.exportSettings.mode, 'precise', 'mode');
+      assertEqual(s.exportSettings.maxSide, 1080, 'maxSide');
+      assertEqual(s.exportSettings.quality, 'high', 'quality');
+      assert(Array.isArray(s.queue) && s.queue.length === 0, 'queue array');
+      assertEqual(s.ui.status, 'idle', 'ui.status');
+      assertEqual(s.ui.zoom, 1, 'ui.zoom');
+      assertEqual(s.ui.error, null, 'ui.error');
+      assertEqual(s.capabilities.webcodecs, false, 'caps.webcodecs');
+      assertEqual(s.capabilities.videoEncode.h264, false, 'caps.h264');
+      assertEqual(s.capabilities.audioEncode.opus, false, 'caps.opus');
+    });
+
+    test('store subscribe notifies on dispatch and unsubscribe stops notifications', () => {
+      const s = createStore();
+      let calls = 0;
+      const sub = s.subscribe(() => {
+        calls += 1;
+      });
+      assert(sub.ok, 'subscribe succeeds');
+      s.dispatch({ type: ACTIONS.SET_PLAYHEAD, payload: 12.5 });
+      assertEqual(calls, 1, 'notified once');
+      assertEqual(s.getState().playheadSec, 12.5, 'playhead updated');
+      sub.value();
+      s.dispatch({ type: ACTIONS.SET_PLAYHEAD, payload: 20 });
+      assertEqual(calls, 1, 'notified count unchanged after unsubscribe');
+    });
+
+    test('store undo/redo tracks clip mutations only and clears redo on new edit', () => {
+      const s = createStore();
+      s.dispatch({ type: ACTIONS.CLIP_ADD, payload: makeClip('c1', 'Intro', 0, 10) });
+      s.dispatch({ type: ACTIONS.CLIP_ADD, payload: makeClip('c2', 'Main', 10, 25) });
+      s.dispatch({ type: ACTIONS.CLIP_UPDATE, payload: { id: 'c2', patch: { name: 'Highlight' } } });
+      s.dispatch({ type: ACTIONS.CLIP_REORDER, payload: { fromIndex: 1, toIndex: 0 } });
+
+      s.dispatch({ type: ACTIONS.SET_PLAYHEAD, payload: 4.5 });
+      s.dispatch({ type: ACTIONS.SET_UI_ZOOM, payload: 2 });
+      assertEqual(s.getHistoryStatus().undoCount, 4, 'only clip mutations counted');
+      assertEqual(s.getState().clips[0].id, 'c2', 'reordered first');
+
+      s.dispatch({ type: ACTIONS.UNDO });
+      assertEqual(s.getState().clips[0].id, 'c1', 'order restored');
+      assertEqual(s.getState().clips[1].name, 'Highlight', 'renamed clip intact');
+
+      s.dispatch({ type: ACTIONS.UNDO });
+      assertEqual(s.getState().clips[1].name, 'Main', 'name restored');
+
+      s.dispatch({ type: ACTIONS.REDO });
+      assertEqual(s.getState().clips[1].name, 'Highlight', 'rename redone');
+      assertEqual(s.getHistoryStatus().redoCount, 1, 'one redo remaining');
+
+      s.dispatch({ type: ACTIONS.CLIP_DELETE, payload: 'c1' });
+      assertEqual(s.getHistoryStatus().redoCount, 0, 'redo cleared');
+      assertEqual(s.getState().clips.length, 1, 'one clip remains');
+      assertEqual(s.getState().playheadSec, 4.5, 'non-clip state untouched by undo/redo');
+    });
+
+    test('store undo history caps at 100 clip snapshots', () => {
+      const s = createStore();
+      const total = MAX_HISTORY + 15;
+      for (let i = 1; i <= total; i += 1) {
+        s.dispatch({ type: ACTIONS.CLIP_ADD, payload: makeClip(`c${i}`, `Clip ${i}`, i, i + 1) });
+      }
+      assertEqual(s.getState().clips.length, total, 'all clips added');
+      assertEqual(s.getHistoryStatus().undoCount, MAX_HISTORY, 'history capped at 100');
+
+      for (let i = 0; i < MAX_HISTORY; i += 1) {
+        s.dispatch({ type: ACTIONS.UNDO });
+      }
+      assertEqual(s.getHistoryStatus().undoCount, 0, 'undo stack drained');
+      assertEqual(s.getState().clips.length, 15, 'oldest 15 clips remain because cap dropped earlier snapshots');
+      assertEqual(s.getHistoryStatus().redoCount, MAX_HISTORY, 'redo stack holds 100 snapshots');
+    });
+
+    /* --- Stage 1: errors.js tests --- */
+    test('errors catalog includes all 20 frozen error codes with message and hint', () => {
+      const expectedCodes = [
+        'E_EMPTY_FILE',
+        'E_UNSUPPORTED_CONTAINER',
+        'E_UNSUPPORTED_CODEC',
+        'E_CORRUPT_FILE',
+        'E_METADATA_INVALID',
+        'E_LOAD_TIMEOUT',
+        'E_RANGE_INVALID',
+        'E_TIME_PARSE',
+        'E_NO_WEBCODECS',
+        'E_ENCODER_UNSUPPORTED',
+        'E_EXPORT_FAILED',
+        'E_OUTPUT_EMPTY',
+        'E_OUTPUT_VERIFY',
+        'E_CANCELLED',
+        'E_ZIP_TOO_LARGE',
+        'E_ZIP_FAILED',
+        'E_DOWNLOAD_FAILED',
+        'E_STORAGE_FULL',
+        'E_STORAGE_UNAVAILABLE',
+        'E_OUT_OF_MEMORY_RISK'
+      ];
+      assertEqual(Object.keys(ERROR_CODES).length, expectedCodes.length, 'error code count');
+      for (const code of expectedCodes) {
+        const entry = ERROR_CATALOG[code];
+        assert(Boolean(entry), `missing catalog entry for ${code}`);
+        assert(isAppError(entry), `${code} must satisfy isAppError`);
+      }
+    });
+
+    test('errors helpers produce typed ok/fail results and normalize arbitrary errors', () => {
+      const success = ok(42);
+      assertEqual(success.ok, true, 'ok flag');
+      assertEqual(success.value, 42, 'ok value');
+
+      const failure = fail(ERROR_CODES.E_EMPTY_FILE);
+      assertEqual(failure.ok, false, 'fail flag');
+      assertEqual(failure.error.code, ERROR_CODES.E_EMPTY_FILE, 'fail code');
+
+      const custom = createAppError(ERROR_CODES.E_RANGE_INVALID, 'Custom message', 'Custom hint');
+      assertEqual(custom.message, 'Custom message', 'custom message');
+      assertEqual(custom.hint, 'Custom hint', 'custom hint');
+
+      const quotaErr = Object.assign(new Error('Disk full'), { name: 'QuotaExceededError' });
+      assertEqual(normalizeError(quotaErr).code, ERROR_CODES.E_STORAGE_FULL, 'QuotaExceededError mapped');
+
+      const abortErr = Object.assign(new Error('Aborted'), { name: 'AbortError' });
+      assertEqual(normalizeError(abortErr).code, ERROR_CODES.E_CANCELLED, 'AbortError mapped');
+
+      const generic = normalizeError(new Error('Boom'), ERROR_CODES.E_ZIP_FAILED);
+      assertEqual(generic.code, ERROR_CODES.E_ZIP_FAILED, 'fallback code applied');
+      assert(generic.message.includes('Boom'), 'detail preserved');
+    });
+
+    /* --- Stage 2: metadata.js & media-input.js tests --- */
+    test('metadata.validateMetadataValues rejects Infinity, NaN, zero duration, and invalid dimensions', () => {
+      assert(validateMetadataValues({ durationSec: 12.5, width: 1920, height: 1080 }).ok, 'valid metadata');
+      assertEqual(validateMetadataValues({ durationSec: Infinity, width: 1920, height: 1080 }).error.code, ERROR_CODES.E_METADATA_INVALID, 'Infinity duration');
+      assertEqual(validateMetadataValues({ durationSec: NaN, width: 1920, height: 1080 }).error.code, ERROR_CODES.E_METADATA_INVALID, 'NaN duration');
+      assertEqual(validateMetadataValues({ durationSec: 0, width: 1920, height: 1080 }).error.code, ERROR_CODES.E_METADATA_INVALID, 'zero duration');
+      assertEqual(validateMetadataValues({ durationSec: 10, width: 0, height: 1080 }).error.code, ERROR_CODES.E_METADATA_INVALID, 'zero width');
+    });
+
+    test('metadata.evaluateCompatibility reports decode/encode verdict accurately', () => {
+      const fullCaps = {
+        webcodecs: true,
+        videoEncode: { h264: true, vp9: true },
+        audioEncode: { aac: true, opus: true }
+      };
+      const full = evaluateCompatibility({ canDecodeVideo: true, canDecodeAudio: true, audioCodec: 'aac', capabilities: fullCaps });
+      assert(full.ok && full.value.canDecode && full.value.canEncode && full.value.status === 'ok', 'full support');
+
+      const webmOnlyCaps = {
+        webcodecs: true,
+        videoEncode: { h264: false, vp9: true },
+        audioEncode: { aac: false, opus: true }
+      };
+      const fallback = evaluateCompatibility({ canDecodeVideo: true, canDecodeAudio: true, audioCodec: 'aac', capabilities: webmOnlyCaps });
+      assert(fallback.ok && !fallback.value.canEncodeMp4 && fallback.value.canEncodeWebm && fallback.value.status === 'warn', 'WebM fallback');
+
+      const noDecode = evaluateCompatibility({ canDecodeVideo: false, canDecodeAudio: true, audioCodec: null, capabilities: fullCaps });
+      assert(noDecode.ok && !noDecode.value.canDecode && noDecode.value.status === 'error', 'cannot decode');
+    });
+
+    test('metadata.computeSourceWarnings flags >30 min, >2 GB, and phone devices', () => {
+      const clean = computeSourceWarnings({ durationSec: 120, size: 10_000_000 }, { isPhone: false });
+      assert(clean.ok && clean.value.length === 0, 'no warnings for short desktop video');
+
+      const warned = computeSourceWarnings(
+        { durationSec: LONG_DURATION_WARN_SEC + 60, size: LARGE_FILE_WARN_BYTES + 1024 },
+        { isPhone: true }
+      );
+      assert(warned.ok && warned.value.length === 3, 'all 3 warnings triggered');
+      assertEqual(formatFileSize(1536).value, '1.50 KB', 'size formatting');
+    });
+
+    test('media-input.validateBasicVideoFile rejects 0-byte files and reads small header slice', async () => {
+      const emptyRes = await validateBasicVideoFile(new Blob([]));
+      assert(!emptyRes.ok && emptyRes.error.code === ERROR_CODES.E_EMPTY_FILE, 'empty file rejected');
+
+      const nonEmptyRes = await validateBasicVideoFile(new Blob(['hello world'], { type: 'video/mp4' }));
+      assert(nonEmptyRes.ok && nonEmptyRes.value.byteLength === 11, 'readable header slice returned');
+
+      assertEqual(getActiveObjectUrl(), null, 'no leaked object URL at rest');
+      assert(revokeActiveObjectUrl().ok, 'revokeActiveObjectUrl is safe when idle');
+    });
+
+    /* --- Stage 3: clips.js tests --- */
+    test('clips.validateClipRange & parseAndValidateRange return E_RANGE_INVALID and E_TIME_PARSE strictly', () => {
+      const good = parseAndValidateRange('00:00:05.000', '00:00:20.500', 60);
+      assert(good.ok && good.value.startSec === 5 && good.value.endSec === 20.5, 'valid range');
+
+      const badParse = parseAndValidateRange('-2', '10', 60);
+      assert(!badParse.ok && badParse.error.code === ERROR_CODES.E_TIME_PARSE, 'negative timestamp rejected');
+
+      const lettersParse = parseAndValidateRange('0', 'abc', 60);
+      assert(!lettersParse.ok && lettersParse.error.code === ERROR_CODES.E_TIME_PARSE, 'letters rejected');
+
+      const reversed = validateClipRange(20, 10, 60);
+      assert(!reversed.ok && reversed.error.code === ERROR_CODES.E_RANGE_INVALID, 'start >= end rejected');
+
+      const equal = validateClipRange(10, 10, 60);
+      assert(!equal.ok && equal.error.code === ERROR_CODES.E_RANGE_INVALID, 'zero-length rejected');
+
+      const pastEnd = validateClipRange(50, 61, 60);
+      assert(!pastEnd.ok && pastEnd.error.code === ERROR_CODES.E_RANGE_INVALID, 'end > duration rejected');
+    });
+
+    test('clips.computePresetRange applies 15/30/60/custom presets clamped to video duration', () => {
+      const p15 = computePresetRange(10, 15, 100);
+      assert(p15.ok && p15.value.endSec === 25 && !p15.value.wasClamped, '15s preset');
+
+      const p60Clamped = computePresetRange(80, 60, 100);
+      assert(p60Clamped.ok && p60Clamped.value.endSec === 100 && p60Clamped.value.wasClamped, '60s clamped to 100s');
+
+      const atEnd = computePresetRange(100, 15, 100);
+      assert(!atEnd.ok && atEnd.error.code === ERROR_CODES.E_RANGE_INVALID, 'cannot apply preset at video end');
+
+      const badPreset = computePresetRange(0, 0, 100);
+      assert(!badPreset.ok && badPreset.error.code === ERROR_CODES.E_RANGE_INVALID, 'zero preset rejected');
+    });
+
+    test('clips workflow: add 5, edit, reorder, delete, undo 3x, redo 1x, and reject invalid edit without mutation', () => {
+      const s = createStore({
+        source: {
+          name: 'demo.mp4',
+          size: 5_000_000,
+          type: 'video/mp4',
+          lastModified: 1,
+          durationSec: 120,
+          width: 1920,
+          height: 1080,
+          fps: 30,
+          videoCodec: 'avc1',
+          audioCodec: 'aac'
+        }
+      });
+
+      const created = [];
+      for (let i = 0; i < 5; i += 1) {
+        const res = addClip(i * 10, i * 10 + 8, `Clip ${i + 1}`, s);
+        assert(res.ok, `add clip ${i + 1}`);
+        created.push(res.value);
+      }
+      assertEqual(s.getState().clips.length, 5, '5 clips added');
+
+      // Invalid edit must fail and leave store untouched
+      const badEdit = updateClipDetails(created[1].id, { name: 'Bad', startInput: '30', endInput: '10' }, s);
+      assert(!badEdit.ok && badEdit.error.code === ERROR_CODES.E_RANGE_INVALID, 'invalid edit rejected');
+      assertEqual(s.getState().clips[1].name, 'Clip 2', 'clip unchanged after invalid edit');
+
+      // 1) Valid edit on Clip 2
+      const editRes = updateClipDetails(created[1].id, { name: 'Hook', startInput: '12', endInput: '19' }, s);
+      assert(editRes.ok, 'valid edit');
+      // 2) Reorder Clip 5 (index 4) to index 0
+      assert(reorderClip(4, 0, s).ok, 'reorder');
+      // 3) Delete Clip 3
+      assert(deleteClip(created[2].id, s).ok, 'delete');
+
+      assertEqual(s.getState().clips.length, 4, '4 clips after delete');
+      assertEqual(s.getState().clips[0].name, 'Clip 5', 'Clip 5 moved to top');
+
+      // Undo 3 times -> undoes delete, reorder, and edit
+      s.dispatch({ type: ACTIONS.UNDO });
+      s.dispatch({ type: ACTIONS.UNDO });
+      s.dispatch({ type: ACTIONS.UNDO });
+      assertEqual(s.getState().clips.length, 5, '5 clips restored after 3 undos');
+      assertEqual(s.getState().clips[0].name, 'Clip 1', 'original order restored');
+      assertEqual(s.getState().clips[1].name, 'Clip 2', 'original Clip 2 name restored');
+
+      // Redo once -> re-applies the edit only
+      s.dispatch({ type: ACTIONS.REDO });
+      assertEqual(s.getState().clips.length, 5, 'still 5 clips after 1 redo');
+      assertEqual(s.getState().clips[1].name, 'Hook', 'edit redone');
+      assertEqual(s.getState().clips[1].startSec, 12, 'edited startSec redone');
+    });
+
+    test('clips rapid creation, duplicate unique ID, and 200-clip soft warning threshold', () => {
+      const s = createStore({
+        source: {
+          name: 'demo.mp4',
+          size: 5_000_000,
+          type: 'video/mp4',
+          lastModified: 1,
+          durationSec: 50,
+          width: 1280,
+          height: 720,
+          fps: 30,
+          videoCodec: 'avc1',
+          audioCodec: 'aac'
+        },
+        playheadSec: 40
+      });
+
+      assert(setLastUsedDurationSec(30).ok, 'set last used duration to 30s');
+      const quick = quickAddClipAtPlayhead(s);
+      assert(quick.ok && quick.value.startSec === 40 && quick.value.endSec === 50, 'quick add clamped at 50s');
+
+      const dup = duplicateClip(quick.value.id, s);
+      assert(dup.ok && dup.value.id !== quick.value.id, 'duplicate has distinct random ID');
+      assert(!shouldWarnClipCount(CLIP_WARN_THRESHOLD - 1), 'no warning at 199');
+      assert(shouldWarnClipCount(CLIP_WARN_THRESHOLD), 'warning at 200');
+    });
+
+    /* --- Stage 4: timeline.js, shortcuts.js, layout.js, clip navigation tests --- */
+    test('timeline coordinate math, zoom clamping, scroll centering, tick interval, and pinch zoom', () => {
+      assertEqual(clampZoom(0.2).value, MIN_ZOOM, 'clamps below MIN_ZOOM');
+      assertEqual(clampZoom(50).value, MAX_ZOOM, 'clamps above MAX_ZOOM');
+      assert(!clampZoom(NaN).ok, 'rejects NaN zoom');
+
+      const metrics = computeTimelineMetrics(120, 4, 600);
+      assert(metrics.ok, 'valid timeline metrics');
+      assertEqual(metrics.value.trackWidthPx, 2400, 'track width = viewport * zoom');
+      assertEqual(metrics.value.pixelsPerSec, 20, '20 px per second');
+
+      const xMid = timeToX(60, 120, 2400);
+      assert(xMid.ok && xMid.value === 1200, '60s maps to 1200px');
+      const tMid = xToTime(1200, 120, 2400);
+      assert(tMid.ok && tMid.value === 60, '1200px maps back to 60s');
+
+      const scrollCenter = computeScrollLeftForPlayhead(60, 120, 2400, 600);
+      assert(scrollCenter.ok && scrollCenter.value === 900, 'playhead centered at scrollLeft 900');
+
+      const tick = computeTickInterval(120, 20);
+      assert(tick.ok && tick.value === 5, '5s ticks at 20 px/s (>=84px apart)');
+
+      const pinch = computePinchZoom(2, 100, 200);
+      assert(pinch.ok && pinch.value === 4, 'doubling pinch distance doubles zoom');
+    });
+
+    test('shortcuts ignore inputs/textareas/selects/contentEditable and map studio actions accurately', () => {
+      assert(isEditableTarget({ tagName: 'INPUT' }), 'INPUT ignored');
+      assert(isEditableTarget({ tagName: 'TEXTAREA' }), 'TEXTAREA ignored');
+      assert(isEditableTarget({ tagName: 'SELECT' }), 'SELECT ignored');
+      assert(isEditableTarget({ tagName: 'DIV', isContentEditable: true }), 'contentEditable ignored');
+      assert(!isEditableTarget({ tagName: 'DIV', isContentEditable: false }), 'plain DIV allowed');
+
+      assertEqual(resolveShortcutAction({ key: ' ', target: { tagName: 'INPUT' } }), null, 'Space ignored in input');
+      assertEqual(resolveShortcutAction({ key: 'i', target: { tagName: 'TEXTAREA' } }), null, 'I ignored in textarea');
+      assertEqual(resolveShortcutAction({ key: ' ', target: { tagName: 'BUTTON' } }), null, 'Space lets focused button activate');
+      assertEqual(resolveShortcutAction({ key: ' ', target: { tagName: 'BODY' } }), 'toggle-play', 'Space toggles play');
+      assertEqual(resolveShortcutAction({ key: 'ArrowLeft', shiftKey: false, target: { tagName: 'BODY' } }), 'seek-back-small', 'ArrowLeft small seek');
+      assertEqual(resolveShortcutAction({ key: 'ArrowRight', shiftKey: true, target: { tagName: 'BODY' } }), 'seek-forward-large', 'Shift+ArrowRight large seek');
+      assertEqual(resolveShortcutAction({ key: 'i', target: { tagName: 'BODY' } }), 'set-start', 'I sets start');
+      assertEqual(resolveShortcutAction({ key: 'O', target: { tagName: 'BODY' } }), 'set-end', 'O sets end');
+      assertEqual(resolveShortcutAction({ key: ',', target: { tagName: 'BODY' } }), 'frame-back', 'comma steps back 1 frame');
+      assertEqual(resolveShortcutAction({ key: '.', target: { tagName: 'BODY' } }), 'frame-forward', 'period steps forward 1 frame');
+      assertEqual(resolveShortcutAction({ key: 'z', ctrlKey: true, shiftKey: false, target: { tagName: 'BODY' } }), 'undo', 'Ctrl+Z undo');
+      assertEqual(resolveShortcutAction({ key: 'z', metaKey: true, shiftKey: true, target: { tagName: 'BODY' } }), 'redo', 'Cmd+Shift+Z redo');
+    });
+
+    test('layout viewport classifier and clip navigation / marker helpers work accurately', () => {
+      assertEqual(classifyViewportWidth(320).value, 'mobile', '320px is mobile');
+      assertEqual(classifyViewportWidth(768).value, 'tablet', '768px is tablet');
+      assertEqual(classifyViewportWidth(1280).value, 'desktop', '1280px is desktop');
+      assert(!classifyViewportWidth(0).ok, '0px width rejected');
+
+      const clips = [makeClip('a', 'A', 0, 5), makeClip('b', 'B', 10, 15), makeClip('c', 'C', 20, 25)];
+      assertEqual(getAdjacentClip(clips, null, 1).value.id, 'a', 'next from none selects first');
+      assertEqual(getAdjacentClip(clips, 'a', 1).value.id, 'b', 'next from a selects b');
+      assertEqual(getAdjacentClip(clips, 'b', -1).value.id, 'a', 'prev from b selects a');
+      assert(!getAdjacentClip(clips, 'a', -1).ok, 'prev from first fails cleanly');
+      assert(!getAdjacentClip(clips, 'c', 1).ok, 'next from last fails cleanly');
+
+      const s = createStore({
+        source: {
+          name: 'demo.mp4',
+          size: 1000,
+          type: 'video/mp4',
+          lastModified: 1,
+          durationSec: 60,
+          width: 1280,
+          height: 720,
+          fps: 30,
+          videoCodec: 'avc1',
+          audioCodec: 'aac'
+        },
+        playheadSec: 12.345
+      });
+      const startRes = setDraftMarkerFromPlayhead('start', s);
+      assert(startRes.ok && s.getState().draft.startSec === 12.345, 'setDraftMarkerFromPlayhead sets start');
+    });
+
+    /* --- Stage 5: crop.js tests --- */
+    test('crop.computeCropPlan guarantees even output dimensions across all ratios and odd source sizes', () => {
+      assertEqual(makeEvenDimension(607.5), 608, '607.5 -> 608');
+      assertEqual(makeEvenDimension(1), 2, 'minimum even dimension is 2');
+      assertEqual(makeEvenDimension(1081, 1080), 1080, 'clamped to even maxSide');
+
+      const sources = [
+        [1920, 1080],
+        [1281, 721],
+        [853, 481],
+        [1080, 1920],
+        [641, 361]
+      ];
+      const maxSides = [720, 1080, 1920];
+      for (const [w, h] of sources) {
+        for (const ratio of CROP_RATIOS) {
+          for (const maxSide of maxSides) {
+            const res = computeCropPlan(w, h, { ratio, zoom: 1, panX: 0.5, panY: 0.5, fit: 'fill', background: 'none' }, maxSide);
+            assert(res.ok, `plan ok for ${w}x${h} ${ratio} max ${maxSide}`);
+            assertEqual(res.value.outputWidth % 2, 0, `even width for ${w}x${h} ${ratio}`);
+            assertEqual(res.value.outputHeight % 2, 0, `even height for ${w}x${h} ${ratio}`);
+            assert(res.value.outputWidth >= 2 && res.value.outputHeight >= 2, 'dimensions >= 2');
+            assert(res.value.outputWidth <= maxSide && res.value.outputHeight <= maxSide, 'dimensions <= maxSide');
+          }
+        }
+      }
+    });
+
+    test('crop.computeCropPlan calculates exact sourceRect/destRect for Fill and Fit with non-center pan and zoom', () => {
+      const fillPlan = computeCropPlan(
+        1920,
+        1080,
+        { ratio: '9:16', zoom: 2, panX: 0.25, panY: 0.75, fit: 'fill', background: 'none' },
+        1080
+      );
+      assert(fillPlan.ok, 'fill plan ok');
+      assertEqual(fillPlan.value.outputWidth, 608, '9:16 width at 1080');
+      assertEqual(fillPlan.value.outputHeight, 1080, '9:16 height at 1080');
+      assertEqual(fillPlan.value.sourceRect.width, 304, 'zoom 2x crop width');
+      assertEqual(fillPlan.value.sourceRect.height, 540, 'zoom 2x crop height');
+      assertEqual(fillPlan.value.sourceRect.x, 404, 'panX 0.25 exact x');
+      assertEqual(fillPlan.value.sourceRect.y, 405, 'panY 0.75 exact y');
+      assertEqual(fillPlan.value.destRect.width, 608, 'fill dest width');
+      assertEqual(fillPlan.value.destRect.height, 1080, 'fill dest height');
+
+      const fitPlan = computeCropPlan(
+        1920,
+        1080,
+        { ratio: '9:16', zoom: 1, panX: 0.5, panY: 0.5, fit: 'fit', background: 'blur' },
+        1080
+      );
+      assert(fitPlan.ok, 'fit plan ok');
+      assertEqual(fitPlan.value.sourceRect.width, 1920, 'fit keeps full source width at zoom 1');
+      assertEqual(fitPlan.value.sourceRect.height, 1080, 'fit keeps full source height at zoom 1');
+      assertEqual(fitPlan.value.destRect.width, 608, 'fit letterboxed width');
+      assertEqual(fitPlan.value.destRect.height, 342, 'fit letterboxed height');
+      assertEqual(fitPlan.value.destRect.y, 369, 'fit vertically centered');
+      assert(fitPlan.value.bgSourceRect !== null, 'blur cover bgSourceRect provided');
+
+      const contentRect = computeVideoContentRect(800, 450, 1080, 1920);
+      assert(contentRect.ok && contentRect.value.height === 450 && contentRect.value.width === 253.125, 'portrait video pillarboxed inside 16:9 stage');
+
+      const dragRes = computePanFromDrag(fillPlan.value, fillPlan.value.crop, 100, 0, 800, 450);
+      assert(dragRes.ok && dragRes.value.panX > 0.25 && dragRes.value.panX <= 1, 'dragging right increases panX within bounds');
+    });
+
+    test('crop normalization, per-clip persistence, reset, and atomic apply-to-all with Undo', () => {
+      const clamped = normalizeCrop({ ratio: 'bad', zoom: 99, panX: -2, panY: 5, fit: 'fill', background: 'blur' });
+      assert(clamped.ok, 'normalizeCrop succeeds');
+      assertEqual(clamped.value.ratio, 'orig', 'invalid ratio falls back to orig');
+      assertEqual(clamped.value.zoom, 4, 'zoom clamped to 4');
+      assertEqual(clamped.value.panX, 0, 'panX clamped to 0');
+      assertEqual(clamped.value.panY, 1, 'panY clamped to 1');
+      assertEqual(clamped.value.background, 'none', 'fill mode resets background to none');
+
+      const s = createStore({
+        clips: [makeClip('c1', 'Clip 1', 0, 10), makeClip('c2', 'Clip 2', 10, 20)],
+        selectedClipId: 'c1'
+      });
+      assert(isCropDefault(s.getState().clips[0].crop), 'initial crop is default');
+
+      assert(updateSelectedClipCrop({ ratio: '9:16', zoom: 1.5, panX: 0.2 }, s).ok, 'update selected clip crop');
+      assertEqual(s.getState().clips[0].crop.ratio, '9:16', 'c1 updated');
+      assertEqual(s.getState().clips[1].crop.ratio, 'orig', 'c2 untouched');
+
+      assert(applyCropToAllClips(s.getState().clips[0].crop, s).ok, 'apply to all clips');
+      assertEqual(s.getState().clips[1].crop.ratio, '9:16', 'c2 updated by apply all');
+      assertEqual(s.getState().clips[1].crop.zoom, 1.5, 'c2 zoom matched');
+
+      // Single undo restores c2 to original
+      s.dispatch({ type: ACTIONS.UNDO });
+      assertEqual(s.getState().clips[1].crop.ratio, 'orig', 'single undo reverts apply-to-all');
+
+      assert(resetSelectedClipCrop(s).ok, 'reset selected clip crop');
+      assert(isCropDefault(s.getState().clips[0].crop), 'c1 back to default');
+    });
+
+    /* --- Stage 6: export-worker.js & export-queue.js preflight tests --- */
+    test('export-worker codec normalization, bitrate profiles, H.264 level selection, and message validation', () => {
+      assertEqual(normalizeCodecFamily('avc1.640028'), 'avc', 'avc1 maps to avc');
+      assertEqual(normalizeCodecFamily('vp09.00.31.08'), 'vp9', 'vp09 maps to vp9');
+      assertEqual(normalizeCodecFamily('mp4a.40.2'), 'aac', 'mp4a maps to aac');
+
+      assert(isFastModeContainerCompatible('mp4', 'avc1.640028', 'aac').ok, 'H.264+AAC compatible with MP4 Fast mode');
+      assert(!isFastModeContainerCompatible('mp4', 'vp9', 'opus').ok, 'VP9 rejected for MP4 Fast mode');
+      assert(isFastModeContainerCompatible('webm', 'vp9', 'opus').ok, 'VP9+Opus compatible with WebM Fast mode');
+
+      const norm = normalizeExportSettings({ format: 'bad', mode: 'bad', maxSide: 1081, quality: 'bad' });
+      assert(norm.ok && norm.value.format === 'mp4' && norm.value.mode === 'precise' && norm.value.maxSide === 1080 && norm.value.quality === 'high', 'settings normalized safely');
+
+      const high1080 = computeBitrateProfile(1920, 1080, { format: 'mp4', quality: 'high' });
+      const low480 = computeBitrateProfile(854, 480, { format: 'webm', quality: 'low' });
+      assert(high1080.ok && low480.ok, 'bitrate profiles succeed');
+      assert(high1080.value.videoBitrate > low480.value.videoBitrate, 'higher res/quality gets higher video bitrate');
+      assertEqual(selectVideoProbeCodecs('mp4', 1920, 1080)[0], 'avc1.640028', '1080p selects H.264 level 4.0');
+      assertEqual(selectVideoProbeCodecs('mp4', 1280, 720)[0], 'avc1.42001f', '720p selects H.264 level 3.1');
+
+      const badStart = validateWorkerStartMessage({ type: 'start', jobId: 'j1', file: new Blob([]), clip: { startSec: 0, endSec: 5 } });
+      assert(!badStart.ok && badStart.error.code === ERROR_CODES.E_EMPTY_FILE, '0-byte file rejected by worker validator');
+
+      const badRange = validateWorkerStartMessage({ type: 'start', jobId: 'j1', file: new Blob(['abc']), clip: { startSec: 10, endSec: 5 } });
+      assert(!badRange.ok && badRange.error.code === ERROR_CODES.E_RANGE_INVALID, 'reversed clip range rejected by worker validator');
+    });
+
+    test('export-queue.buildEncoderConfigsForClip enforces even dimensions and populates audio/video configs', () => {
+      const source = {
+        name: 'odd.mp4',
+        size: 10_000_000,
+        durationSec: 60,
+        width: 1920,
+        height: 1080,
+        fps: 29.97,
+        videoCodec: 'avc',
+        audioCodec: 'aac'
+      };
+      const clip = {
+        ...makeClip('c1', 'Reel', 5, 20),
+        crop: { ratio: '9:16', zoom: 1, panX: 0.5, panY: 0.5, fit: 'fill', background: 'none' }
+      };
+      const cfg = buildEncoderConfigsForClip(source, clip, { format: 'mp4', mode: 'precise', maxSide: 1080, quality: 'high' });
+      assert(cfg.ok, 'encoder configs built');
+      assertEqual(cfg.value.plan.outputWidth, 608, 'even width 608');
+      assertEqual(cfg.value.plan.outputHeight, 1080, 'even height 1080');
+      assertEqual(cfg.value.videoConfigs[0].width % 2, 0, 'config width even');
+      assertEqual(cfg.value.videoConfigs[0].height % 2, 0, 'config height even');
+      assertEqual(cfg.value.audioConfig.codec, 'mp4a.40.2', 'AAC audio config');
+
+      const silentSource = { ...source, audioCodec: null };
+      const silentCfg = buildEncoderConfigsForClip(silentSource, clip, { format: 'webm', mode: 'precise', maxSide: 720, quality: 'medium' });
+      assert(silentCfg.ok && silentCfg.value.audioConfig === null && !silentCfg.value.hasAudio, 'silent video omits audio config');
+    });
+
+    test('export-queue.runExportPreflight blocks Fast mode on cropped clips and catches unsupported encoders', async () => {
+      const source = {
+        name: 'demo.mp4',
+        size: 20_000_000,
+        durationSec: 120,
+        width: 1920,
+        height: 1080,
+        fps: 30,
+        videoCodec: 'avc',
+        audioCodec: 'aac'
+      };
+      const caps = { webcodecs: true, worker: true, videoEncode: { h264: true, vp9: true }, audioEncode: { aac: true, opus: true } };
+      const croppedClip = {
+        ...makeClip('c1', 'Short', 0, 15),
+        crop: { ratio: '9:16', zoom: 1, panX: 0.5, panY: 0.5, fit: 'fill', background: 'none' }
+      };
+
+      const fastCropped = await runExportPreflight({
+        source,
+        clips: [croppedClip],
+        settings: { format: 'mp4', mode: 'fast', maxSide: 1080, quality: 'high' },
+        capabilities: caps,
+        isPhone: false
+      });
+      assert(fastCropped.ok && !fastCropped.value.ready && !fastCropped.value.fastModeAllowed, 'Fast mode blocked when crop is active');
+
+      const unsupportedEnc = await runExportPreflight({
+        source,
+        clips: [croppedClip],
+        settings: { format: 'mp4', mode: 'precise', maxSide: 1080, quality: 'high' },
+        capabilities: caps,
+        isPhone: false,
+        probeVideoConfig: async () => false,
+        probeAudioConfig: async () => true
+      });
+      assert(unsupportedEnc.ok && !unsupportedEnc.value.ready, 'unsupported encoder blocks preflight');
+      assertEqual(unsupportedEnc.value.blockers[0].code, ERROR_CODES.E_ENCODER_UNSUPPORTED, 'returns E_ENCODER_UNSUPPORTED');
+
+      const passing = await runExportPreflight({
+        source,
+        clips: [croppedClip],
+        settings: { format: 'webm', mode: 'precise', maxSide: 720, quality: 'medium' },
+        capabilities: caps,
+        isPhone: false,
+        probeVideoConfig: async () => true,
+        probeAudioConfig: async () => true
+      });
+      assert(passing.ok && passing.value.ready && passing.value.blockers.length === 0, 'supported encoder passes preflight');
+    });
+
+    test('export-queue.estimateExportBatch flags E_OUT_OF_MEMORY_RISK for oversized phone exports', async () => {
+      const longSource = {
+        name: 'long.mp4',
+        size: 1_500_000_000,
+        durationSec: 3600,
+        width: 1920,
+        height: 1080,
+        fps: 30,
+        videoCodec: 'avc',
+        audioCodec: 'aac'
+      };
+      const hugeClip = makeClip('c1', 'Whole hour', 0, 1200);
+      const est = estimateExportBatch(
+        longSource,
+        [hugeClip],
+        { format: 'mp4', mode: 'precise', maxSide: 1080, quality: 'high' },
+        { isPhone: true }
+      );
+      assert(est.ok && est.value.memoryRisk === 'error', '20-min 1080p high-quality single clip flags memory error on phone');
+
+      const preflight = await runExportPreflight({
+        source: longSource,
+        clips: [hugeClip],
+        settings: { format: 'mp4', mode: 'precise', maxSide: 1080, quality: 'high' },
+        capabilities: { webcodecs: true, worker: true },
+        isPhone: true,
+        probeVideoConfig: async () => true,
+        probeAudioConfig: async () => true
+      });
+      assert(preflight.ok && !preflight.value.ready, 'preflight blocks high memory risk');
+      assert(preflight.value.blockers.some((b) => b.code === ERROR_CODES.E_OUT_OF_MEMORY_RISK), 'includes E_OUT_OF_MEMORY_RISK');
+    });
+
+    /* --- Stage 7: download.js, zip.js, and queue/verification tests --- */
+    test('download filename builder strips unsafe chars, guards Windows reserved names, deduplicates, and caps length', () => {
+      assertEqual(sanitizeFilenamePart('CON', 'clip'), 'file_CON', 'Windows reserved CON guarded');
+      assertEqual(sanitizeFilenamePart('bad<>:"/\\|?*name', 'clip'), 'bad_name', 'unsafe OS characters stripped');
+
+      const used = new Set();
+      const f1 = buildClipFilename({
+        sourceName: 'My Trip: 2026?.mp4',
+        clipName: 'Intro / Hook*',
+        startSec: 5,
+        endSec: 20.5,
+        format: 'mp4',
+        existingNames: used
+      });
+      assert(f1.ok, 'first filename built');
+      assertEqual(f1.value, 'My_Trip_2026_Intro_Hook_00m05s-00m20.5s.mp4', 'exact safe formatted filename');
+      used.add(f1.value);
+
+      const f2 = buildClipFilename({
+        sourceName: 'My Trip: 2026?.mp4',
+        clipName: 'Intro / Hook*',
+        startSec: 5,
+        endSec: 20.5,
+        format: 'mp4',
+        existingNames: used
+      });
+      assert(f2.ok && f2.value.endsWith('_2.mp4'), 'duplicate filename gets _2 suffix');
+
+      const longName = buildClipFilename({
+        sourceName: 'A'.repeat(150) + '.mp4',
+        clipName: 'B'.repeat(150),
+        startSec: 0,
+        endSec: 12,
+        format: 'webm'
+      });
+      assert(longName.ok && longName.value.length <= MAX_FILENAME_LENGTH, 'long filename capped safely');
+      assert(longName.value.endsWith('.webm'), 'extension preserved after truncation');
+
+      const custom = sanitizeCustomFilename('NUL.mp4', 'mp4', ['file_nul.mp4']);
+      assert(custom.ok && custom.value === 'file_NUL_2.mp4', 'custom filename blocks reserved names & deduplicates case-insensitively');
+      assertEqual(buildZipFilename('Show: Ep1.mov').value, 'Show_Ep1_clips.zip', 'zip filename sanitized');
+    });
+
+    test('zip CRC-32 matches standard IEEE 802.3 vector and streams across Blob chunks', async () => {
+      const vecBytes = new TextEncoder().encode('123456789');
+      const crcDirect = computeCrc32Bytes(vecBytes);
+      assert(crcDirect.ok, 'direct CRC-32 ok');
+      assertEqual(crcDirect.value, 0xCBF43926, 'canonical CRC-32("123456789") === 0xCBF43926');
+
+      const blobCrc = await computeBlobCrc32(new Blob([vecBytes]), { chunkBytes: 3 });
+      assert(blobCrc.ok, 'chunked Blob CRC-32 ok');
+      assertEqual(blobCrc.value, 0xCBF43926, '3-byte chunked Blob CRC-32 matches exact vector');
+    });
+
+    test('zip.buildZipArchive creates valid store-only ZIP headers, central directory, EOCD, and payloads', async () => {
+      const payload1 = new TextEncoder().encode('alpha-clip-data');
+      const payload2 = new TextEncoder().encode('beta-second-clip-payload');
+      const res = await buildZipArchive([
+        { filename: 'clip_one.mp4', blob: new Blob([payload1], { type: 'video/mp4' }) },
+        { filename: 'clip_two.webm', blob: new Blob([payload2], { type: 'video/webm' }) }
+      ]);
+      assert(res.ok, 'ZIP archive built');
+      assertEqual(res.value.entryCount, 2, '2 entries recorded');
+      assertEqual(res.value.blob.size, res.value.totalBytes, 'Blob size matches exact calculated ZIP size');
+
+      const bytes = new Uint8Array(await res.value.blob.arrayBuffer());
+      const view = new DataView(bytes.buffer);
+      // Local file header #1 signature: PK\x03\x04 (0x04034b50)
+      assertEqual(view.getUint32(0, true), 0x04034b50, 'local file header 1 signature');
+      assertEqual(view.getUint16(8, true), 0, 'store-only compression method 0');
+      assertEqual(view.getUint32(14, true), computeCrc32Bytes(payload1).value, 'entry 1 CRC-32 matches');
+      assertEqual(view.getUint32(18, true), payload1.length, 'entry 1 size matches');
+
+      // End of Central Directory signature at last 22 bytes: PK\x05\x06 (0x06054b50)
+      const eocdOffset = bytes.length - 22;
+      assertEqual(view.getUint32(eocdOffset, true), 0x06054b50, 'EOCD signature at end of archive');
+      assertEqual(view.getUint16(eocdOffset + 8, true), 2, 'EOCD entry count on disk === 2');
+      assertEqual(view.getUint16(eocdOffset + 10, true), 2, 'EOCD total entries === 2');
+
+      const cdOffset = view.getUint32(eocdOffset + 16, true);
+      assertEqual(view.getUint32(cdOffset, true), 0x02014b50, 'central directory signature at EOCD offset');
+    });
+
+    test('zip.estimateZipTotalBytes refuses archives exceeding 4 GB with E_ZIP_TOO_LARGE', () => {
+      const fakeBigBlobA = { size: 2_100_000_000, slice: () => new Blob([]) };
+      const fakeBigBlobB = { size: 2_000_000_000, slice: () => new Blob([]) };
+      const res = estimateZipTotalBytes([
+        { filename: 'part1.mp4', blob: fakeBigBlobA },
+        { filename: 'part2.mp4', blob: fakeBigBlobB }
+      ]);
+      assert(!res.ok, 'over-4GB archive rejected');
+      assertEqual(res.error.code, ERROR_CODES.E_ZIP_TOO_LARGE, 'returns frozen E_ZIP_TOO_LARGE');
+      assert(ZIP_MAX_BYTES <= 0xFFFFFFFF, 'ZIP_MAX_BYTES stays strictly inside 32-bit ZIP limit');
+    });
+
+    test('export-queue duration verification, job building, summary math, and sequential batch downloader', async () => {
+      assert(verifyOutputDuration(10.2, 10.0, 'precise').ok, 'precise within 0.5s passes');
+      assertEqual(verifyOutputDuration(11.2, 10.0, 'precise').error.code, ERROR_CODES.E_OUTPUT_VERIFY, 'precise >0.5s off fails');
+      assert(verifyOutputDuration(13.0, 10.0, 'fast').ok, 'fast mode allows earlier keyframe lead-in');
+      assertEqual(verifyOutputDuration(8.0, 10.0, 'fast').error.code, ERROR_CODES.E_OUTPUT_VERIFY, 'fast mode rejects truncated output');
+      assertEqual(verifyOutputDuration(0, 10.0, 'precise').error.code, ERROR_CODES.E_OUTPUT_VERIFY, 'zero duration fails');
+
+      const jobsRes = buildQueueJobs({
+        sourceName: 'lecture.mp4',
+        clips: [makeClip('c1', 'Part A', 0, 10), makeClip('c2', 'Part A', 0, 10)],
+        settings: { format: 'mp4', mode: 'precise', maxSide: 720, quality: 'medium' }
+      });
+      assert(jobsRes.ok && jobsRes.value.length === 2, '2 queue jobs created');
+      assert(jobsRes.value[0].filename !== jobsRes.value[1].filename, 'duplicate clip names produce distinct job filenames');
+
+      const summary = computeQueueSummary([
+        { status: 'done', progress: 100, outputBytes: 1000 },
+        { status: 'running', progress: 50, outputBytes: 0 },
+        { status: 'failed', progress: 20, outputBytes: 0 }
+      ]);
+      assertEqual(summary.done, 1, '1 done');
+      assertEqual(summary.failed, 1, '1 failed');
+      assertEqual(summary.totalOutputBytes, 1000, 'output bytes summed');
+
+      const triggered = [];
+      const batch = await downloadBatchSequentially(
+        [
+          { id: 'j1', filename: 'a.mp4', blob: new Blob(['aaa']) },
+          { id: 'j2', filename: 'b.mp4', blob: new Blob(['bbb']) }
+        ],
+        {
+          delayMs: 0,
+          downloadFn: (_blob, name) => {
+            triggered.push(name);
+            return ok({ filename: name, bytes: 3 });
+          }
+        }
+      );
+      assert(batch.ok && batch.value.downloadedIds.length === 2, 'sequential batch downloads both items');
+      assertEqual(triggered.join(','), 'a.mp4,b.mp4', 'order preserved');
+      assert(batch.value.multiDownloadNote.length > 0, 'provides multi-download permission note for >1 clip');
+    });
+
+    /* --- Stage 8: Storage, autosave, recovery, and export history --- */
+
+    test('storage.buildProjectSnapshot & validateProjectSnapshot strip transient states and validate safely', () => {
+      const state = {
+        ...createInitialState(),
+        source: {
+          name: 'podcast.mp4',
+          size: 12345678,
+          durationSec: 120.5,
+          width: 1920,
+          height: 1080,
+          fps: 30,
+          videoCodec: 'avc1.42001f',
+          audioCodec: 'mp4a.40.2'
+        },
+        clips: [
+          { ...makeClip('c1', 'Intro', 0, 15), processStatus: 'running', exportStatus: 'none' },
+          { ...makeClip('c2', 'Highlight', 30, 55), processStatus: 'done', exportStatus: 'downloaded' }
+        ],
+        selectedClipId: 'c2',
+        draft: { startSec: 10, endSec: 25 },
+        exportSettings: { format: 'webm', mode: 'precise', maxSide: 720, quality: 'medium' },
+        ui: { status: 'ready', zoom: 4, error: null }
+      };
+
+      const built = buildProjectSnapshot(state, 1700000000000);
+      assert(built.ok, 'snapshot built');
+      assert(isSnapshotRecoverable(built.value), 'snapshot with source and clips is recoverable');
+      assertEqual(built.value.clips[0].processStatus, 'idle', 'transient running status reset to idle on save');
+      assertEqual(built.value.clips[1].processStatus, 'done', 'done status preserved');
+      assertEqual(built.value.exportSettings.format, 'webm', 'export settings preserved');
+
+      const validated = validateProjectSnapshot(JSON.parse(JSON.stringify(built.value)));
+      assert(validated.ok, 'JSON round-tripped snapshot validates');
+      assertEqual(validated.value.selectedClipId, 'c2', 'selected clip preserved');
+      assert(!isSnapshotRecoverable(buildProjectSnapshot(createInitialState()).value), 'empty workspace not recoverable');
+    });
+
+    test('storage.compareSourceFileToSnapshot & reconcileRecoveredClips detect mismatches and fit ranges', () => {
+      const savedMeta = { name: 'trip.mp4', size: 50000000, durationSec: 120.0 };
+      const exact = compareSourceFileToSnapshot(savedMeta, { name: 'trip.mp4', size: 50000000, durationSec: 120.2 });
+      assert(exact.ok && exact.value.exactMatch, 'matching file within 0.5s tolerance passes');
+
+      const wrong = compareSourceFileToSnapshot(savedMeta, { name: 'other.mp4', size: 1000000, durationSec: 40.0 });
+      assert(wrong.ok && !wrong.value.exactMatch, 'different name/size/duration flagged as mismatch');
+      assertEqual(wrong.value.mismatches.length, 3, 'all 3 mismatch reasons reported');
+
+      const rec = reconcileRecoveredClips(
+        [
+          makeClip('c1', 'Fits', 0, 20),
+          makeClip('c2', 'Clamps', 30, 60),
+          makeClip('c3', 'Out', 45, 70)
+        ],
+        40
+      );
+      assert(rec.ok, 'reconciliation succeeds');
+      assertEqual(rec.value.keptCount, 1, '1 clip kept untouched');
+      assertEqual(rec.value.clampedCount, 1, '1 clip clamped to 40s');
+      assertEqual(rec.value.droppedCount, 1, '1 clip dropped past end');
+      assertEqual(rec.value.clips[1].endSec, 40, 'clamped clip ends cleanly at 40s');
+    });
+
+    test('storage.classifyStorageError maps QuotaExceededError to E_STORAGE_FULL and missing IDB to E_STORAGE_UNAVAILABLE', async () => {
+      const quotaErr = classifyStorageError({ name: 'QuotaExceededError', message: 'Quota exceeded' });
+      assertEqual(quotaErr.code, ERROR_CODES.E_STORAGE_FULL, 'quota error mapped to E_STORAGE_FULL');
+
+      const blockedErr = classifyStorageError({ name: 'SecurityError', message: 'IDB blocked' });
+      assertEqual(blockedErr.code, ERROR_CODES.E_STORAGE_UNAVAILABLE, 'blocked IDB mapped to E_STORAGE_UNAVAILABLE');
+
+      assert(!isStorageAvailable(null), 'null IDB factory detected as unavailable');
+      const saveNoIdb = await saveProjectSnapshot(createInitialState(), { idb: null });
+      assert(!saveNoIdb.ok && saveNoIdb.error.code === ERROR_CODES.E_STORAGE_UNAVAILABLE, 'save fails cleanly when IDB missing');
+
+      const recOk = createExportHistoryRecord({
+        sourceName: 'clip_src.mp4',
+        clipName: 'Intro',
+        filename: 'clip_src_Intro.mp4',
+        startSec: 0,
+        endSec: 12,
+        durationSec: 12,
+        format: 'mp4',
+        mode: 'precise',
+        outputBytes: 4096,
+        delivery: 'downloaded'
+      });
+      assert(recOk.ok && recOk.value.delivery === 'downloaded', 'valid export history record created');
+      assert(!createExportHistoryRecord({ filename: '' }).ok, 'empty filename rejected');
+    });
+
+    test('storage IndexedDB round-trip saves/loads/clears project and export history in isolated test DB', async () => {
+      if (!isStorageAvailable()) {
+        return;
+      }
+      const testDbName = 'heiwa-clips-cut-test-db';
+      const opts = { dbName: testDbName };
+
+      const sampleState = {
+        ...createInitialState(),
+        source: {
+          name: 'demo.mp4',
+          size: 409600,
+          durationSec: 45,
+          width: 1280,
+          height: 720,
+          fps: 30,
+          videoCodec: 'avc1.42001f',
+          audioCodec: 'mp4a.40.2'
+        },
+        clips: [makeClip('t1', 'Hook', 2, 12)],
+        selectedClipId: 't1',
+        draft: { startSec: 2, endSec: 12 }
+      };
+
+      const saved = await saveProjectSnapshot(sampleState, opts);
+      assert(saved.ok, 'snapshot persisted to test IndexedDB');
+
+      const loaded = await loadProjectSnapshot(opts);
+      assert(loaded.ok && loaded.value !== null, 'snapshot loaded back from IndexedDB');
+      assertEqual(loaded.value.sourceMeta.name, 'demo.mp4', 'source name matches');
+      assertEqual(loaded.value.clips.length, 1, 'clip count matches');
+
+      await clearExportHistory(opts);
+      const addHist = await appendExportHistoryEntry(
+        {
+          sourceName: 'demo.mp4',
+          clipName: 'Hook',
+          filename: 'demo_Hook_00-02-00-12.mp4',
+          startSec: 2,
+          endSec: 12,
+          durationSec: 10,
+          format: 'mp4',
+          mode: 'precise',
+          outputBytes: 98765,
+          delivery: 'exported'
+        },
+        opts
+      );
+      assert(addHist.ok, 'export history entry appended');
+
+      const histList = await listExportHistory(opts);
+      assert(histList.ok && histList.value.length === 1, '1 history entry listed');
+      assertEqual(histList.value[0].filename, 'demo_Hook_00-02-00-12.mp4', 'history filename matches');
+
+      const clearedHist = await clearExportHistory(opts);
+      assert(clearedHist.ok, 'history cleared');
+      const afterClearHist = await listExportHistory(opts);
+      assert(afterClearHist.ok && afterClearHist.value.length === 0, 'history empty after clear');
+
+      const clearedSnap = await clearProjectSnapshot(opts);
+      assert(clearedSnap.ok, 'project snapshot cleared');
+      const afterClearSnap = await loadProjectSnapshot(opts);
+      assert(afterClearSnap.ok && afterClearSnap.value === null, 'snapshot null after clear');
+    });
+
+    /* --- Stage 9: PWA & Android TWA --- */
+
+    test('pwa context, display mode, iOS Safari detection, and online checks', () => {
+      assert(isSecurePwaContext({ protocol: 'https:', hostname: 'clips.example.com' }), 'HTTPS is secure');
+      assert(isSecurePwaContext({ protocol: 'http:', hostname: 'localhost' }), 'localhost is secure');
+      assert(isSecurePwaContext({ protocol: 'http:', hostname: '127.0.0.1' }), '127.0.0.1 is secure');
+      assert(!isSecurePwaContext({ protocol: 'http:', hostname: '192.168.1.50' }), 'LAN HTTP is not secure');
+      assert(!isSecurePwaContext({ protocol: 'file:', hostname: '' }), 'file:// is not secure');
+
+      assertEqual(
+        detectDisplayMode({ matchMedia: () => ({ matches: false }) }, { referrer: 'android-app://com.example.heiwaclipscut' }),
+        'twa',
+        'android-app referrer detected as twa'
+      );
+      assertEqual(
+        detectDisplayMode({ matchMedia: (q) => ({ matches: q.includes('standalone') }) }, { referrer: '' }),
+        'standalone',
+        'standalone media query detected'
+      );
+      assertEqual(
+        detectDisplayMode({ matchMedia: () => ({ matches: false }) }, { referrer: '' }),
+        'browser',
+        'regular browser tab detected'
+      );
+
+      assert(
+        detectIosSafari({
+          userAgent: 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+          platform: 'iPad',
+          maxTouchPoints: 5
+        }),
+        'iPad Safari detected'
+      );
+      assert(
+        !detectIosSafari({
+          userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/128.0.0.0 Mobile Safari/537.36',
+          platform: 'Linux armv8l',
+          maxTouchPoints: 5
+        }),
+        'Android Chrome is not flagged as iOS Safari'
+      );
+      assertEqual(isOnlineStatus({ onLine: false }), false, 'offline status detected');
+    });
+
+    test('pwa.validateAssetLinksPayload validates Digital Asset Links JSON structure', () => {
+      const valid = validateAssetLinksPayload([
+        {
+          relation: ['delegate_permission/common.handle_all_urls'],
+          target: {
+            namespace: 'android_app',
+            package_name: 'com.example.heiwaclipscut',
+            sha256_cert_fingerprints: ['00:11:22:33']
+          }
+        }
+      ]);
+      assert(valid.ok && valid.value === 1, 'valid assetlinks payload accepted');
+      assert(!validateAssetLinksPayload([]).ok, 'empty array rejected');
+      assert(!validateAssetLinksPayload([{ relation: [], target: {} }]).ok, 'missing relation/target rejected');
+    });
+
+    async function runAllTests() {
+      const listEl = document.getElementById('status-test-list');
+      const summaryEl = document.getElementById('status-test-summary');
+      while (listEl.firstChild) {
+        listEl.removeChild(listEl.firstChild);
+      }
+
+      let passed = 0;
+      let failed = 0;
+
+      for (const t of tests) {
+        const itemEl = document.createElement('li');
+        const headEl = document.createElement('div');
+        headEl.className = 'test-item__head';
+
+        const nameEl = document.createElement('span');
+        nameEl.textContent = t.name;
+
+        const badgeEl = document.createElement('span');
+        const detailEl = document.createElement('p');
+        detailEl.className = 'test-item__detail';
+
+        try {
+          await t.fn();
+          passed += 1;
+          itemEl.className = 'test-item test-item--pass';
+          badgeEl.textContent = 'PASS';
+          detailEl.textContent = 'All assertions passed.';
+        } catch (err) {
+          failed += 1;
+          itemEl.className = 'test-item test-item--fail';
+          badgeEl.textContent = 'FAIL';
+          detailEl.textContent = err instanceof Error ? err.message : String(err);
+        }
+
+        headEl.appendChild(nameEl);
+        headEl.appendChild(badgeEl);
+        itemEl.appendChild(headEl);
+        itemEl.appendChild(detailEl);
+        listEl.appendChild(itemEl);
+      }
+
+      summaryEl.textContent = `${passed} passed, ${failed} failed`;
+      summaryEl.className = failed === 0
+        ? 'status-pill status-pill--success'
+        : 'status-pill status-pill--failure';
+    }
+
+    const rerunBtn = document.getElementById('status-test-rerun');
+    if (rerunBtn) {
+      rerunBtn.addEventListener('click', () => {
+        runAllTests();
+      });
+    }
+
+    runAllTests();
+  </script>
+</body>
+</html>

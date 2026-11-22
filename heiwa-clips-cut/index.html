@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<!--
+  Heiwa Clips Cut — DOM ID Registry (keep in sync with all HTML/JS)
+  Area prefixes: input-, preview-, tl-, clip-, crop-, export-, dl-, status-
+
+  Stage 1 IDs:
+  - status-header-bar        : Top studio header bar
+  - status-app-badge         : Current UI state pill (idle, loading, ready, etc.)
+  - status-capabilities-list : Header capability summary strip
+  - status-recheck-btn       : Re-runs browser capability probes
+  - status-live              : ARIA live region for screen-reader status updates
+  - status-toast-region      : Container for non-blocking toast notifications
+  - status-workspace-shell   : Main studio workspace container
+  - status-stage-summary     : Capability detail list
+
+  Stage 2 IDs:
+  - input-panel              : Video source input and metadata panel
+  - input-dropzone           : Drag-and-drop and click target for opening local video
+  - input-file-picker        : Hidden native <input type="file"> element
+  - input-open-btn           : Opens native file picker
+  - input-replace-btn        : Replaces active video with full object URL cleanup
+  - input-clear-btn          : Clears active video and resets workspace state
+  - input-file-name          : Active source filename display
+  - input-metadata-grid      : Metadata facts (duration, resolution, fps, codecs, size)
+  - input-compatibility-box  : Compatibility verdict banner (can decode / can encode)
+  - input-warnings-list      : Source warnings list (>30m, >2GB, phone note)
+  - input-error-box          : Inline typed error banner for source load/analysis failures
+  - preview-panel            : Video preview panel
+  - preview-stage            : Aspect-preserving preview viewport
+  - preview-video            : Native <video> playback element
+  - preview-empty            : Empty state prompt before video is loaded
+  - preview-loading          : Loading state indicator during 15s load/analysis
+  - preview-error            : Failure state banner inside preview stage
+  - preview-play-btn         : Play / Pause toggle button
+  - preview-current-time     : Current playhead timestamp (HH:MM:SS.mmm)
+  - preview-duration-time    : Total source duration timestamp (HH:MM:SS.mmm)
+  - preview-seek-bar         : Range slider for seeking playback position
+
+  Stage 3 IDs:
+  - clip-panel               : Clip markers, presets, and dynamic clip list panel
+  - clip-count-badge         : Total clip count pill
+  - clip-undo-btn            : Undo last clip mutation
+  - clip-redo-btn            : Redo last undone clip mutation
+  - clip-draft-start         : Direct timestamp input for draft start (HH:MM:SS.mmm)
+  - clip-draft-end           : Direct timestamp input for draft end (HH:MM:SS.mmm)
+  - clip-set-start-btn       : Set draft start marker from current playhead
+  - clip-set-end-btn         : Set draft end marker from current playhead
+  - clip-draft-reset-btn     : Reset draft start/end markers
+  - clip-preset-15           : Apply 15s duration preset from draft start
+  - clip-preset-30           : Apply 30s duration preset from draft start
+  - clip-preset-60           : Apply 60s duration preset from draft start
+  - clip-preset-custom-sec   : Custom duration seconds input
+  - clip-preset-custom-btn   : Apply custom duration preset
+  - clip-add-btn             : Add clip from validated draft start/end
+  - clip-quick-add-btn       : One-tap rapid clip creation at playhead using last duration
+  - clip-draft-error         : Inline validation error box for draft markers/presets
+  - clip-count-warning       : Soft warning banner shown at 200+ clips
+  - clip-empty-state         : Empty state message when clip list is empty
+  - clip-list                : Dynamic clip list with drag reorder and action buttons
+
+  Stage 4 IDs:
+  - status-shortcuts-btn     : Opens accessible keyboard shortcuts dialog
+  - status-dialog            : Accessible modal dialog host
+  - preview-frame-back-btn   : Step backward by 1 frame using detected fps
+  - preview-frame-fwd-btn    : Step forward by 1 frame using detected fps
+  - preview-prev-clip-btn    : Select and seek to previous clip
+  - preview-jump-start-btn   : Jump playhead to selected clip start
+  - preview-jump-end-btn     : Jump playhead to selected clip end
+  - preview-next-clip-btn    : Select and seek to next clip
+  - tl-panel                 : Interactive timeline panel
+  - tl-zoom-out-btn          : Zoom timeline out
+  - tl-zoom-reset-btn        : Reset timeline zoom to 1.0x
+  - tl-zoom-in-btn           : Zoom timeline in keeping playhead visible
+  - tl-pan-left-btn          : Pan timeline viewport left
+  - tl-pan-right-btn         : Pan timeline viewport right
+  - tl-viewport              : Horizontally scrollable timeline viewport
+  - tl-track                 : Interactive timeline track for scrubbing and pinch-zoom
+  - tl-ruler                 : Time ruler ticks along the top of the timeline
+  - tl-draft-bar             : Highlighted draft range overlay
+  - tl-clips-layer           : Positioned clip range bars on the timeline
+  - tl-playhead              : Vertical playhead cursor
+  - tl-empty-hint            : Idle hint shown when no video is loaded
+
+  Stage 5 IDs:
+  - crop-framed-canvas       : Live Canvas 2D framed preview inside preview stage
+  - crop-overlay             : Interactive crop overlay aligned to displayed video rect
+  - crop-box                 : Draggable and keyboard-nudgeable crop framing box
+  - crop-panel               : Crop and framing controls panel
+  - crop-target-badge        : Active selected clip label in crop panel
+  - crop-output-info         : Computed even output dimensions and aspect ratio readout
+  - crop-ratio-orig          : Original aspect ratio preset
+  - crop-ratio-9-16          : 9:16 vertical aspect ratio preset
+  - crop-ratio-16-9          : 16:9 widescreen aspect ratio preset
+  - crop-ratio-1-1           : 1:1 square aspect ratio preset
+  - crop-ratio-4-5           : 4:5 portrait aspect ratio preset
+  - crop-fit-fill            : Fill (cover/crop) framing mode
+  - crop-fit-contain         : Fit (contain/letterbox) framing mode
+  - crop-bg-none             : Black bars background for Fit mode
+  - crop-bg-blur             : Blurred video background for Fit mode (feature-detected)
+  - crop-blur-note           : Notice shown when browser lacks Canvas filter blur support
+  - crop-zoom-slider         : Crop zoom range input (1x to 4x)
+  - crop-zoom-value          : Current crop zoom readout
+  - crop-pan-readout         : Current pan percentage readout
+  - crop-preview-mode-btn    : Toggles between interactive crop overlay and framed canvas output
+  - crop-reset-btn           : Resets selected clip framing to original defaults
+  - crop-apply-all-btn       : Applies selected clip framing to all clips atomically
+
+  Stage 6 IDs:
+  - export-panel             : Adaptive export engine, sequential queue, and download panel
+  - export-format-mp4        : Select MP4 (H.264/AAC) output format
+  - export-format-webm       : Select WebM (VP9/Opus) output format
+  - export-mode-precise      : Select Precise mode (re-encode with crop/resize support)
+  - export-mode-fast         : Select Fast mode (keyframe-aligned packet copy, no crop)
+  - export-fast-note         : Honest note explaining keyframe start alignment or crop restriction
+  - export-res-480           : Cap longest output side to 480px
+  - export-res-720           : Cap longest output side to 720px
+  - export-res-1080          : Cap longest output side to 1080px
+  - export-res-1920          : Cap longest output side to 1920px
+  - export-quality-low       : Low bitrate quality preset
+  - export-quality-medium    : Medium bitrate quality preset
+  - export-quality-high      : High bitrate quality preset
+  - export-preflight-btn     : Re-runs real WebCodecs encoder & memory preflight check
+  - export-preflight-box     : Preflight status, estimates, warnings, and blockers box
+
+  Stage 7 IDs:
+  - export-all-btn           : Queues and exports all clips sequentially
+  - export-selected-btn      : Queues and exports only the currently selected clip
+  - export-cancel-btn        : Cancels the active export job and remaining queued jobs
+  - export-retry-failed-btn  : Re-queues all failed or cancelled jobs
+  - export-clear-queue-btn   : Clears the queue and releases exported output blobs from RAM
+  - export-queue-summary     : Overall queue completion count, percentage, and total output size
+  - export-queue-progress    : Overall batch progress bar
+  - export-queue-empty       : Empty state hint when no export jobs exist
+  - export-queue-list        : List of export jobs with per-job progress, editable filename, Download, and Retry
+  - dl-panel                 : Batch download and store-only ZIP controls section
+  - dl-all-btn               : Triggers sequential individual downloads for all verified clips
+  - dl-zip-btn               : Streams or downloads a store-only ZIP archive of all verified clips
+  - dl-phone-note            : Phone-specific note recommending individual downloads over ZIP
+  - dl-status-box            : Status banner for active ZIP writing, batch download progress, or browser tips
+
+  Stage 8 IDs:
+  - status-storage-pill      : Header indicator for IndexedDB autosave status
+  - status-recovery-banner   : Recovery banner shown when an autosaved project awaits video re-selection
+  - status-recovery-text     : Expected file details and clip count waiting for re-attachment
+  - status-recovery-open-btn : Opens native file picker to re-attach the original video file
+  - status-recovery-discard-btn : Discards pending recovered session from IndexedDB
+  - status-history-panel     : Local IndexedDB storage & metadata-only export history panel
+  - status-storage-info      : Autosave timestamp, persistence state, and browser storage quota estimate
+  - status-storage-persist-btn : Requests navigator.storage.persist() for autosaved projects
+  - status-history-clear-btn : Clears saved export history metadata from IndexedDB
+  - status-history-empty     : Empty state hint when no export history entries exist
+  - status-history-list      : List of recent local export/download metadata records
+
+  Stage 9 IDs:
+  - status-network-pill      : Header indicator for Online / Offline / Installed / TWA mode
+  - status-pwa-install-btn   : Triggers Chromium install prompt or iOS/iPadOS Add to Home Screen guide
+  - status-pwa-update-banner : Banner shown when a new Service Worker version is waiting
+  - status-pwa-update-btn    : Activates waiting Service Worker (SKIP_WAITING) and reloads safely
+  - status-pwa-dismiss-btn   : Dismisses the Service Worker update banner
+
+  Section heading aria-labelledby targets:
+  - preview-heading, tl-heading, crop-heading, clip-heading, export-heading,
+    input-heading, history-heading, foundation-heading
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Heiwa Clips">
+  <meta name="description" content="Heiwa Clips Cut: local-only, browser-based multi-clip video clipping studio.">
+  <title>Heiwa Clips Cut</title>
+  <link rel="icon" type="image/svg+xml" href="./icons/favicon.svg">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./css/app.css">
+  <link rel="stylesheet" href="./css/layout.css">
+  <link rel="stylesheet" href="./css/components.css">
+</head>
+<body>
+  <a href="#status-workspace-shell" class="skip-link">Skip to workspace</a>
+  <div class="app-shell">
+    <header id="status-header-bar" class="studio-header">
+      <div class="studio-header__top">
+        <div class="brand">
+          <img src="./icons/favicon.svg" alt="" width="28" height="28" class="brand__icon" aria-hidden="true">
+          <div class="brand__text">
+            <h1 class="brand__title">Heiwa Clips Cut</h1>
+            <p class="brand__subtitle">Local multi-clip video studio</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <span id="status-app-badge" class="status-pill status-pill--idle">Idle</span>
+          <span id="status-storage-pill" class="status-pill status-pill--idle">Autosave: Ready</span>
+          <span id="status-network-pill" class="status-pill status-pill--ready">Online</span>
+          <button id="status-pwa-install-btn" type="button" class="btn btn--primary btn--compact" hidden>
+            Install App
+          </button>
+          <button id="status-shortcuts-btn" type="button" class="btn btn--ghost btn--compact" aria-haspopup="dialog">
+            Shortcuts
+          </button>
+          <button id="status-recheck-btn" type="button" class="btn btn--secondary btn--compact">
+            Recheck capabilities
+          </button>
+          <a href="./tests/tests.html" class="btn btn--ghost btn--compact">Run tests</a>
+        </div>
+      </div>
+
+      <div class="capability-bar" aria-label="Browser capabilities">
+        <ul id="status-capabilities-list" class="capability-list">
+          <li class="cap-chip cap-chip--pending">Checking browser capabilities…</li>
+        </ul>
+      </div>
+    </header>
+
+    <div id="status-recovery-banner" class="recovery-banner-shell" role="region" aria-label="Session recovery" hidden>
+      <div class="recovery-banner">
+        <p id="status-recovery-text" class="recovery-banner__text">
+          Recovery pending: open your video file to re-attach saved clips.
+        </p>
+        <div class="recovery-banner__actions">
+          <button id="status-recovery-open-btn" type="button" class="btn btn--primary btn--compact">
+            Choose Video to Re-attach
+          </button>
+          <button id="status-recovery-discard-btn" type="button" class="btn btn--ghost btn--compact">
+            Discard Recovery
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="status-pwa-update-banner" class="recovery-banner-shell" role="region" aria-label="App update available" hidden>
+      <div class="update-banner">
+        <p class="recovery-banner__text">
+          A new version of Heiwa Clips Cut is cached and ready. Reload to activate the update.
+        </p>
+        <div class="recovery-banner__actions">
+          <button id="status-pwa-update-btn" type="button" class="btn btn--primary btn--compact">
+            Reload to Update
+          </button>
+          <button id="status-pwa-dismiss-btn" type="button" class="btn btn--ghost btn--compact">
+            Later
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <main id="status-workspace-shell" class="studio-main studio-grid" data-layout-mode="mobile" data-ui-status="idle">
+      <section id="preview-panel" class="panel preview-panel" aria-labelledby="preview-heading">
+        <div class="panel__header">
+          <h2 id="preview-heading" class="panel__title">Preview</h2>
+          <span id="input-file-name" class="file-name-badge">No video loaded</span>
+        </div>
+
+        <div id="preview-stage" class="preview-stage">
+          <video id="preview-video" class="preview-video" playsinline preload="metadata" hidden></video>
+          <canvas id="crop-framed-canvas" class="crop-framed-canvas" hidden aria-label="Live framed output preview"></canvas>
+          <div id="crop-overlay" class="crop-overlay" hidden>
+            <div
+              id="crop-box"
+              class="crop-box"
+              tabindex="0"
+              role="application"
+              aria-label="Crop frame. Drag to reposition or press arrow keys to nudge."
+            >
+              <span class="crop-box__grid-v1" aria-hidden="true"></span>
+              <span class="crop-box__grid-v2" aria-hidden="true"></span>
+              <span class="crop-box__grid-h1" aria-hidden="true"></span>
+              <span class="crop-box__grid-h2" aria-hidden="true"></span>
+            </div>
+          </div>
+          <div id="preview-empty" class="preview-state">
+            <p class="preview-state__title">Open a local video to begin</p>
+            <p class="preview-state__hint">Your video stays on this device and is never uploaded.</p>
+          </div>
+          <div id="preview-loading" class="preview-state preview-state--loading" hidden>
+            Loading video…
+          </div>
+          <div id="preview-error" class="preview-state preview-state--error" role="alert" hidden></div>
+        </div>
+
+        <div class="preview-controls">
+          <div class="transport-group" role="group" aria-label="Playback and frame stepping">
+            <button id="preview-frame-back-btn" type="button" class="btn btn--secondary btn--compact" disabled aria-label="Step backward one frame" title="Step back 1 frame (,)">
+              -1f
+            </button>
+            <button id="preview-play-btn" type="button" class="btn btn--primary" disabled aria-pressed="false">
+              Play
+            </button>
+            <button id="preview-frame-fwd-btn" type="button" class="btn btn--secondary btn--compact" disabled aria-label="Step forward one frame" title="Step forward 1 frame (.)">
+              +1f
+            </button>
+          </div>
+
+          <div class="preview-time-group" aria-label="Playback time">
+            <span id="preview-current-time" class="time-readout">00:00:00.000</span>
+            <span class="time-sep" aria-hidden="true">/</span>
+            <span id="preview-duration-time" class="time-readout">00:00:00.000</span>
+          </div>
+
+          <label class="seek-bar-wrap" for="preview-seek-bar">
+            <span class="sr-only">Seek video position</span>
+            <input id="preview-seek-bar" class="seek-bar" type="range" min="0" max="1000" step="1" value="0" disabled>
+          </label>
+        </div>
+
+        <div class="clip-nav-bar" role="group" aria-label="Clip jump navigation">
+          <button id="preview-prev-clip-btn" type="button" class="btn btn--secondary btn--compact" disabled>
+            Prev clip
+          </button>
+          <button id="preview-jump-start-btn" type="button" class="btn btn--secondary btn--compact" disabled>
+            Clip start
+          </button>
+          <button id="preview-jump-end-btn" type="button" class="btn btn--secondary btn--compact" disabled>
+            Clip end
+          </button>
+          <button id="preview-next-clip-btn" type="button" class="btn btn--secondary btn--compact" disabled>
+            Next clip
+          </button>
+        </div>
+      </section>
+
+      <section id="tl-panel" class="panel tl-panel" aria-labelledby="tl-heading">
+        <div class="panel__header">
+          <h2 id="tl-heading" class="panel__title">Timeline</h2>
+          <div class="panel__actions" role="group" aria-label="Timeline zoom and pan controls">
+            <button id="tl-pan-left-btn" type="button" class="btn btn--secondary btn--compact" disabled aria-label="Pan timeline left">
+              Pan Left
+            </button>
+            <button id="tl-zoom-out-btn" type="button" class="btn btn--secondary btn--compact" disabled aria-label="Zoom timeline out">
+              -
+            </button>
+            <button id="tl-zoom-reset-btn" type="button" class="btn btn--secondary btn--compact" disabled>
+              1.0× Reset
+            </button>
+            <button id="tl-zoom-in-btn" type="button" class="btn btn--secondary btn--compact" disabled aria-label="Zoom timeline in">
+              +
+            </button>
+            <button id="tl-pan-right-btn" type="button" class="btn btn--secondary btn--compact" disabled aria-label="Pan timeline right">
+              Pan Right
+            </button>
+          </div>
+        </div>
+
+        <div id="tl-viewport" class="tl-viewport">
+          <div
+            id="tl-track"
+            class="tl-track"
+            tabindex="0"
+            role="slider"
+            aria-label="Video timeline seek bar"
+            aria-valuemin="0"
+            aria-valuemax="0"
+            aria-valuenow="0"
+            aria-valuetext="00:00:00.000"
+          >
+            <div id="tl-ruler" class="tl-ruler" aria-hidden="true"></div>
+            <div class="tl-lane">
+              <div id="tl-draft-bar" class="tl-draft-bar" hidden aria-hidden="true"></div>
+              <div id="tl-clips-layer" class="tl-clips-layer"></div>
+            </div>
+            <div id="tl-playhead" class="tl-playhead" hidden aria-hidden="true">
+              <span class="tl-playhead__head"></span>
+            </div>
+            <p id="tl-empty-hint" class="tl-empty-hint">
+              Open a video to view the timeline, scrub playhead, and zoom into clip ranges.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="crop-panel" class="panel crop-panel" aria-labelledby="crop-heading">
+        <div class="panel__header">
+          <div class="panel__title-group">
+            <h2 id="crop-heading" class="panel__title">Crop &amp; Reframe</h2>
+            <span id="crop-target-badge" class="status-pill">Select a clip</span>
+          </div>
+          <span id="crop-output-info" class="file-name-badge">Open a video and add a clip</span>
+        </div>
+
+        <div class="crop-controls">
+          <div class="crop-group">
+            <span class="field-group__label">Aspect Ratio</span>
+            <div class="button-row" role="group" aria-label="Aspect ratio presets">
+              <button id="crop-ratio-orig" type="button" class="btn btn--secondary btn--compact" disabled aria-pressed="false">Original</button>
+              <button id="crop-ratio-9-16" type="button" class="btn btn--secondary btn--compact" disabled aria-pressed="false">9:16</button>
+              <button id="crop-ratio-16-9" type="button" class="btn btn--secondary btn--compact" disabled aria-pressed="false">16:9</button>
+              <button id="crop-ratio-1-1" type="button" class="btn btn--secondary btn--compact" disabled aria-pressed="false">1:1</button>
+              <button id="crop-ratio-4-5" type="button" class="btn btn--secondary btn--compact" disabled aria-pressed="false">4:5</button>
+            </div>
+          </div>
+
+          <div class="crop-row-split">
+            <div class="crop-group">
+              <span class="field-group__label">Framing Mode</span>
+              <div class="button-row" role="group" aria-label="Framing mode">
+                <button id="crop-fit-fill" type="button" class="btn btn--secondary btn--compact" disabled aria-pressed="false">Fill</button>
+                <button id="crop-fit-contain" type="button" class="btn btn--secondary btn--compact" disabled aria-pressed="false">Fit</button>
+              </div>
+            </div>
+
+            <div class="crop-group">
+              <span class="field-group__label">Fit Background</span>
+              <div class="button-row" role="group" aria-label="Fit background style">
+                <button id="crop-bg-none" type="button" class="btn btn--secondary btn--compact" disabled aria-pressed="false">Black bars</button>
+                <button id="crop-bg-blur" type="button" class="btn btn--secondary btn--compact" disabled aria-pressed="false">Blur</button>
+              </div>
+              <p id="crop-blur-note" class="muted-text crop-note" hidden>
+                Blur background is hidden because this browser does not support Canvas 2D filter blur.
+              </p>
+            </div>
+          </div>
+
+          <div class="crop-group">
+            <div class="crop-slider-header">
+              <label class="field-group__label" for="crop-zoom-slider">Zoom (1× to 4×)</label>
+              <span id="crop-zoom-value" class="time-readout">1.00×</span>
+            </div>
+            <input id="crop-zoom-slider" class="seek-bar" type="range" min="1" max="4" step="0.05" value="1" disabled>
+            <p id="crop-pan-readout" class="muted-text crop-note">Position 50% × 50%</p>
+          </div>
+
+          <div class="button-row">
+            <button id="crop-preview-mode-btn" type="button" class="btn btn--secondary btn--compact" disabled aria-pressed="false">
+              Preview Framed Output
+            </button>
+            <button id="crop-reset-btn" type="button" class="btn btn--ghost btn--compact" disabled>
+              Reset
+            </button>
+            <button id="crop-apply-all-btn" type="button" class="btn btn--secondary btn--compact" disabled>
+              Apply to all clips
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section id="clip-panel" class="panel clip-panel" aria-labelledby="clip-heading">
+        <div class="panel__header">
+          <div class="panel__title-group">
+            <h2 id="clip-heading" class="panel__title">Clips &amp; Markers</h2>
+            <span id="clip-count-badge" class="status-pill">0 clips</span>
+          </div>
+          <div class="panel__actions">
+            <button id="clip-undo-btn" type="button" class="btn btn--secondary btn--compact" disabled>
+              Undo
+            </button>
+            <button id="clip-redo-btn" type="button" class="btn btn--secondary btn--compact" disabled>
+              Redo
+            </button>
+          </div>
+        </div>
+
+        <div class="marker-controls">
+          <div class="marker-inputs">
+            <label class="field-group" for="clip-draft-start">
+              <span class="field-group__label">Start (HH:MM:SS.mmm)</span>
+              <input id="clip-draft-start" class="text-input" type="text" value="00:00:00.000" inputmode="decimal" disabled>
+            </label>
+            <label class="field-group" for="clip-draft-end">
+              <span class="field-group__label">End (HH:MM:SS.mmm)</span>
+              <input id="clip-draft-end" class="text-input" type="text" value="00:00:00.000" inputmode="decimal" disabled>
+            </label>
+          </div>
+
+          <div class="button-row">
+            <button id="clip-set-start-btn" type="button" class="btn btn--secondary btn--compact" disabled title="Set start at playhead (I)">
+              Set Start (I)
+            </button>
+            <button id="clip-set-end-btn" type="button" class="btn btn--secondary btn--compact" disabled title="Set end at playhead (O)">
+              Set End (O)
+            </button>
+            <button id="clip-draft-reset-btn" type="button" class="btn btn--ghost btn--compact" disabled>
+              Reset
+            </button>
+          </div>
+
+          <div class="preset-bar" aria-label="Duration presets">
+            <button id="clip-preset-15" type="button" class="btn btn--secondary btn--compact" disabled>
+              15s
+            </button>
+            <button id="clip-preset-30" type="button" class="btn btn--secondary btn--compact" disabled>
+              30s
+            </button>
+            <button id="clip-preset-60" type="button" class="btn btn--secondary btn--compact" disabled>
+              60s
+            </button>
+            <div class="custom-preset-group">
+              <label class="sr-only" for="clip-preset-custom-sec">Custom duration in seconds</label>
+              <input id="clip-preset-custom-sec" class="text-input text-input--narrow" type="text" placeholder="Custom s" inputmode="decimal" disabled>
+              <button id="clip-preset-custom-btn" type="button" class="btn btn--secondary btn--compact" disabled>
+                Apply
+              </button>
+            </div>
+          </div>
+
+          <div class="button-row">
+            <button id="clip-add-btn" type="button" class="btn btn--primary" disabled>
+              Add Clip
+            </button>
+            <button id="clip-quick-add-btn" type="button" class="btn btn--secondary" disabled>
+              Quick +15s at Playhead
+            </button>
+          </div>
+
+          <div id="clip-draft-error" class="alert-box alert-box--error" role="alert" hidden></div>
+        </div>
+
+        <div id="clip-count-warning" class="alert-box alert-box--warn" role="status" hidden></div>
+        <p id="clip-empty-state" class="muted-text">
+          No clips yet. Set Start/End markers or use a duration preset and click Add Clip.
+        </p>
+        <ul id="clip-list" class="clip-list" aria-label="Clip list"></ul>
+      </section>
+
+      <section id="export-panel" class="panel export-panel" aria-labelledby="export-heading">
+        <div class="panel__header">
+          <h2 id="export-heading" class="panel__title">Export Queue &amp; Downloads</h2>
+          <button id="export-preflight-btn" type="button" class="btn btn--secondary btn--compact" disabled>
+            Run Preflight Check
+          </button>
+        </div>
+
+        <div class="export-controls">
+          <div class="export-row-split">
+            <div class="crop-group">
+              <span class="field-group__label">Output Format</span>
+              <div class="button-row" role="group" aria-label="Output container format">
+                <button id="export-format-mp4" type="button" class="btn btn--secondary btn--compact" aria-pressed="true">MP4 (H.264/AAC)</button>
+                <button id="export-format-webm" type="button" class="btn btn--secondary btn--compact" aria-pressed="false">WebM (VP9/Opus)</button>
+              </div>
+            </div>
+
+            <div class="crop-group">
+              <span class="field-group__label">Processing Mode</span>
+              <div class="button-row" role="group" aria-label="Processing mode">
+                <button id="export-mode-precise" type="button" class="btn btn--secondary btn--compact" aria-pressed="true">Precise (Re-encode)</button>
+                <button id="export-mode-fast" type="button" class="btn btn--secondary btn--compact" aria-pressed="false">Fast (Keyframe Copy)</button>
+              </div>
+              <p id="export-fast-note" class="muted-text crop-note">
+                Fast mode: starts at the nearest earlier keyframe; the clip may begin slightly before your start point.
+              </p>
+            </div>
+          </div>
+
+          <div class="export-row-split">
+            <div class="crop-group">
+              <span class="field-group__label">Max Resolution (Longest Side)</span>
+              <div class="button-row" role="group" aria-label="Maximum output resolution">
+                <button id="export-res-480" type="button" class="btn btn--secondary btn--compact" aria-pressed="false">480p</button>
+                <button id="export-res-720" type="button" class="btn btn--secondary btn--compact" aria-pressed="false">720p</button>
+                <button id="export-res-1080" type="button" class="btn btn--secondary btn--compact" aria-pressed="true">1080p</button>
+                <button id="export-res-1920" type="button" class="btn btn--secondary btn--compact" aria-pressed="false">1920px</button>
+              </div>
+            </div>
+
+            <div class="crop-group">
+              <span class="field-group__label">Quality</span>
+              <div class="button-row" role="group" aria-label="Encoding quality">
+                <button id="export-quality-low" type="button" class="btn btn--secondary btn--compact" aria-pressed="false">Low</button>
+                <button id="export-quality-medium" type="button" class="btn btn--secondary btn--compact" aria-pressed="false">Medium</button>
+                <button id="export-quality-high" type="button" class="btn btn--secondary btn--compact" aria-pressed="true">High</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="export-preflight-box" class="alert-box" role="status">
+            <p class="alert-box__title">Preflight: open a video and add clips to validate encoder support.</p>
+          </div>
+
+          <div class="button-row" role="group" aria-label="Export queue actions">
+            <button id="export-all-btn" type="button" class="btn btn--primary" disabled>
+              Export All Clips
+            </button>
+            <button id="export-selected-btn" type="button" class="btn btn--secondary" disabled>
+              Export Selected Clip
+            </button>
+            <button id="export-cancel-btn" type="button" class="btn btn--danger-ghost" disabled>
+              Cancel
+            </button>
+            <button id="export-retry-failed-btn" type="button" class="btn btn--secondary btn--compact" disabled>
+              Retry Failed
+            </button>
+            <button id="export-clear-queue-btn" type="button" class="btn btn--ghost btn--compact" disabled>
+              Clear Queue
+            </button>
+          </div>
+
+          <div class="export-queue-header">
+            <p id="export-queue-summary" class="export-progress__label">No export jobs yet.</p>
+            <progress id="export-queue-progress" class="export-progress__bar" max="100" value="0" hidden></progress>
+          </div>
+
+          <p id="export-queue-empty" class="muted-text">
+            Export jobs run one clip at a time in a Web Worker and verify output playback before download.
+          </p>
+          <ul id="export-queue-list" class="job-list" aria-label="Export queue"></ul>
+
+          <div id="dl-panel" class="dl-section" aria-label="Batch download and ZIP archive">
+            <div class="button-row">
+              <button id="dl-all-btn" type="button" class="btn btn--secondary" disabled>
+                Download All
+              </button>
+              <button id="dl-zip-btn" type="button" class="btn btn--secondary" disabled>
+                Download ZIP
+              </button>
+            </div>
+            <p id="dl-phone-note" class="muted-text crop-note" hidden></p>
+            <div id="dl-status-box" class="alert-box" role="status" hidden></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="input-panel" class="panel input-panel" aria-labelledby="input-heading">
+        <div class="panel__header">
+          <h2 id="input-heading" class="panel__title">Source Video</h2>
+          <div class="panel__actions">
+            <button id="input-replace-btn" type="button" class="btn btn--secondary" disabled>
+              Replace
+            </button>
+            <button id="input-clear-btn" type="button" class="btn btn--ghost" disabled>
+              Clear
+            </button>
+          </div>
+        </div>
+
+        <input id="input-file-picker" class="sr-only" type="file" accept="video/*">
+
+        <div id="input-dropzone" class="dropzone" aria-label="Drop a local video file here">
+          <p class="dropzone__title">Drop a local video file here</p>
+          <p class="dropzone__hint">MP4, MOV, WebM, or MKV. Streamed locally with zero uploads.</p>
+          <button id="input-open-btn" type="button" class="btn btn--primary">
+            Choose video file
+          </button>
+        </div>
+
+        <div id="input-error-box" class="alert-box alert-box--error" role="alert" hidden></div>
+        <div id="input-compatibility-box" class="alert-box" hidden></div>
+        <ul id="input-warnings-list" class="warnings-list" aria-label="Source video warnings" hidden></ul>
+        <dl id="input-metadata-grid" class="metadata-grid" aria-label="Video metadata" hidden></dl>
+      </section>
+
+      <section id="status-history-panel" class="panel history-panel" aria-labelledby="history-heading">
+        <div class="panel__header">
+          <h2 id="history-heading" class="panel__title">Local Storage &amp; Export History</h2>
+          <div class="panel__actions">
+            <button id="status-storage-persist-btn" type="button" class="btn btn--secondary btn--compact" hidden>
+              Request Persistent Storage
+            </button>
+            <button id="status-history-clear-btn" type="button" class="btn btn--ghost btn--compact" disabled>
+              Clear History
+            </button>
+          </div>
+        </div>
+        <p id="status-storage-info" class="storage-meta-bar">
+          Autosaves clip ranges, crop settings, and export preferences locally in IndexedDB.
+        </p>
+        <p id="status-history-empty" class="muted-text">
+          No export history recorded yet. Completed exports and downloads are logged here as metadata only (no video files stored).
+        </p>
+        <ul id="status-history-list" class="history-list" aria-label="Local export history"></ul>
+      </section>
+
+      <section class="panel panel--foundation" aria-labelledby="foundation-heading">
+        <h2 id="foundation-heading" class="panel__title">Device Capability Details</h2>
+        <p class="panel__lead">
+          All video analysis and processing run locally in your browser via WebCodecs and Mediabunny.
+        </p>
+        <div id="status-stage-summary" class="capability-grid" aria-label="Detailed capability checks">
+          <p class="muted-text">Probing WebCodecs, encoders, workers, and storage APIs…</p>
+        </div>
+      </section>
+    </main>
+
+    <dialog id="status-dialog" class="studio-dialog" aria-modal="true"></dialog>
+    <div id="status-live" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+    <section id="status-toast-region" class="toast-region" aria-label="Notifications"></section>
+  </div>
+
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
